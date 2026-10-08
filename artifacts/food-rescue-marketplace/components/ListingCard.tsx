@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
-import { FoodListing, ListingPhoto } from '@/context/MarketplaceContext';
+import { FoodListing, formatRupees, ListingPhoto } from '@/context/MarketplaceContext';
 
 const photos: Record<ListingPhoto, ImageSourcePropType> = {
   bakery: require('@/assets/images/listing-bakery.jpg'),
@@ -48,7 +48,7 @@ export function ListingCard({
       <View style={styles.imageWrap}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${listing.name}, ${listing.price} dollars, from ${listing.vendor}`}
+      accessibilityLabel={`${listing.name}, ${formatRupees(listing.price)}, from ${listing.vendor}`}
           onPress={onPress}
           style={({ pressed }) => [styles.imageTap, pressed && styles.pressed]}
         >
@@ -82,9 +82,7 @@ export function ListingCard({
           <Text numberOfLines={1} style={[styles.title, { color: colors.foreground }]}>
             {listing.name}
           </Text>
-          <Text style={[styles.price, { color: colors.foreground }]}>
-            ${listing.price}
-          </Text>
+          <Text style={[styles.price, { color: colors.foreground }]}>{formatRupees(listing.price)}</Text>
         </View>
         <Text style={[styles.vendor, { color: colors.mutedForeground }]}>
           {listing.vendor}
@@ -104,9 +102,7 @@ export function ListingCard({
           </View>
         </View>
         <View style={styles.footer}>
-          <Text style={[styles.oldPrice, { color: colors.mutedForeground }]}>
-            ${listing.originalPrice}
-          </Text>
+          <Text style={[styles.oldPrice, { color: colors.mutedForeground }]}>{formatRupees(listing.originalPrice)}</Text>
           <Text style={[styles.portions, { color: colors.secondaryForeground }]}>
             {listing.quantity} {listing.quantity === 1 ? 'left' : 'left'}
           </Text>

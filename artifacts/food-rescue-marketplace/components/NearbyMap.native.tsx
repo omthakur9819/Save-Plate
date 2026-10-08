@@ -4,8 +4,8 @@ import MapView, { Marker, Region } from 'react-native-maps';
 import { NearbyMapProps } from '@/components/NearbyMap.types';
 
 const defaultRegion: Region = {
-  latitude: 37.775,
-  longitude: -122.423,
+  latitude: 19.0595,
+  longitude: 72.8315,
   latitudeDelta: 0.023,
   longitudeDelta: 0.023,
 };
@@ -40,7 +40,7 @@ export default function NearbyMap({
         <Marker
           key={item.id}
           coordinate={{ latitude: item.latitude, longitude: item.longitude }}
-          title={`$${item.price} · ${item.name}`}
+          title={`${item.name} · ₹${item.price}`}
           description={`${item.vendor} · ${item.area}`}
           onPress={() => onMarkerPress(item)}
           testID={`map-marker-${item.id}`}

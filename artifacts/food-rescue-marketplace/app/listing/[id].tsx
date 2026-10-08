@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FoodListing, ListingPhoto, useMarketplace } from '@/context/MarketplaceContext';
+import { FoodListing, formatRupees, ListingPhoto, useMarketplace } from '@/context/MarketplaceContext';
 import { useColors } from '@/hooks/useColors';
 
 const photos: Record<ListingPhoto, ImageSourcePropType> = {
@@ -109,10 +109,10 @@ export default function ListingDetailScreen() {
           </View>
           <View style={styles.titleRow}>
             <Text style={[styles.title, { color: colors.foreground }]}>{listing.name}</Text>
-            <Text style={[styles.price, { color: colors.foreground }]}>${listing.price}</Text>
+            <Text style={[styles.price, { color: colors.foreground }]}>{formatRupees(listing.price)}</Text>
           </View>
           <Text style={[styles.vendor, { color: colors.mutedForeground }]}>
-            From {listing.vendor} · <Text style={{ textDecorationLine: 'line-through' }}>${listing.originalPrice}</Text>
+            From {listing.vendor} · <Text style={{ textDecorationLine: 'line-through' }}>{formatRupees(listing.originalPrice)}</Text>
           </Text>
           <View style={[styles.rule, { borderColor: colors.border }]} />
           <Text style={[styles.description, { color: colors.foreground }]}>{listing.description}</Text>
@@ -156,7 +156,7 @@ export default function ListingDetailScreen() {
         ]}
       >
         <View>
-          <Text style={[styles.bottomPrice, { color: colors.foreground }]}>${listing.price}</Text>
+          <Text style={[styles.bottomPrice, { color: colors.foreground }]}>{formatRupees(listing.price)}</Text>
           <Text style={[styles.bottomMeta, { color: colors.mutedForeground }]}>pay at pickup</Text>
         </View>
         <Pressable

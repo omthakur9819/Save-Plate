@@ -126,7 +126,7 @@ export default function NearbyMapScreen() {
             Tap a spot to see what’s ready for pickup
           </Text>
           <View style={styles.neighborhood}>
-            <Text style={[styles.neighborhoodText, { color: colors.secondaryForeground }]}>San Francisco</Text>
+            <Text style={[styles.neighborhoodText, { color: colors.secondaryForeground }]}>Mumbai</Text>
             <Feather name="chevron-down" size={13} color={colors.secondaryForeground} />
           </View>
         </View>

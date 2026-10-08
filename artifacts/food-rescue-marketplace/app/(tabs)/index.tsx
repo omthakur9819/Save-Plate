@@ -72,7 +72,7 @@ export default function ExploreScreen() {
                 GOOD FOOD, SECOND CHANCE
               </Text>
               <Text style={[styles.location, { color: colors.foreground }]}>
-                San Francisco <Feather name="chevron-down" size={17} color={colors.foreground} />
+                Mumbai <Feather name="chevron-down" size={17} color={colors.foreground} />
               </Text>
             </View>
             <Pressable

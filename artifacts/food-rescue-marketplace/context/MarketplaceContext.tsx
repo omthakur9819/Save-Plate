@@ -13,6 +13,14 @@ export type FoodCategory = 'Bakery' | 'Cafe' | 'Meals';
 export type ListingPhoto = 'bakery' | 'lunch';
 export type AppMode = 'shopper' | 'vendor';
 
+export function formatRupees(amount: number) {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 export interface FoodListing {
   id: string;
   name: string;
@@ -64,74 +72,76 @@ interface MarketplaceValue extends PersistedState {
 }
 
 const STORAGE_KEY = '@goodagain/marketplace-v1';
+const OLD_DEMO_AREAS = new Set([
+  'Hayes Valley',
+  'Lower Haight',
+  'Civic Center',
+  'Duboce Triangle',
+]);
 const DEFAULT_LISTINGS: FoodListing[] = [
   {
     id: 'seed-bakery',
-    name: 'The little bakery bag',
-    vendor: 'Sunday Bakehouse',
+    name: 'Surprise bakery bag',
+    vendor: 'Bandra Bread Room',
     category: 'Bakery',
-    price: 5,
-    originalPrice: 16,
+    price: 149,
+    originalPrice: 399,
     quantity: 4,
     pickupWindow: 'Today, 5:30–6:30 PM',
-    area: 'Hayes Valley',
-    distance: '0.4 mi',
+    area: 'Bandra West',
+    distance: '0.5 km',
     photo: 'bakery',
-    latitude: 37.776,
-    longitude: -122.424,
-    description:
-      'A happy mix of today’s extra pastries and bread. Expect a little surprise in every bag.',
+    latitude: 19.0593,
+    longitude: 72.829,
+    description: 'A happy mix of today’s extra pastries and bread. Expect a little surprise in every bag.',
   },
   {
     id: 'seed-lunch',
-    name: 'Harvest lunch bowl',
-    vendor: 'Olive & Grain Cafe',
+    name: 'Monsoon harvest lunch bowl',
+    vendor: 'Mango Leaf Cafe',
     category: 'Cafe',
-    price: 7,
-    originalPrice: 18,
+    price: 159,
+    originalPrice: 425,
     quantity: 3,
     pickupWindow: 'Today, 4:00–5:00 PM',
-    area: 'Lower Haight',
-    distance: '0.8 mi',
+    area: 'Khar West',
+    distance: '1.5 km',
     photo: 'lunch',
-    latitude: 37.772,
-    longitude: -122.431,
-    description:
-      'A fresh seasonal grain bowl with roasted vegetables, herbs and a little loaf of house bread.',
+    latitude: 19.067,
+    longitude: 72.832,
+    description: 'A fresh seasonal grain bowl with roasted vegetables, herbs and a little loaf of house bread.',
   },
   {
     id: 'seed-pastry',
-    name: 'Pastry box for two',
-    vendor: 'Sunday Bakehouse',
+    name: 'Assorted pastry box',
+    vendor: 'Bandra Bread Room',
     category: 'Bakery',
-    price: 6,
-    originalPrice: 20,
+    price: 199,
+    originalPrice: 549,
     quantity: 2,
     pickupWindow: 'Today, 6:00–7:00 PM',
-    area: 'Civic Center',
-    distance: '1.1 mi',
+    area: 'Pali Hill',
+    distance: '1.2 km',
     photo: 'bakery',
-    latitude: 37.779,
-    longitude: -122.416,
-    description:
-      'Four assorted pastries from the counter, packed up fresh just before closing.',
+    latitude: 19.062,
+    longitude: 72.825,
+    description: 'Four assorted pastries from the counter, packed up fresh just before closing.',
   },
   {
     id: 'seed-supper',
-    name: 'Tonight’s supper plate',
-    vendor: 'Olive & Grain Cafe',
+    name: 'Tonight’s veg tiffin',
+    vendor: 'Dabba & Co.',
     category: 'Meals',
-    price: 8,
-    originalPrice: 21,
+    price: 189,
+    originalPrice: 480,
     quantity: 2,
     pickupWindow: 'Today, 6:30–7:30 PM',
-    area: 'Duboce Triangle',
-    distance: '1.3 mi',
+    area: 'Bandra West',
+    distance: '1.8 km',
     photo: 'lunch',
-    latitude: 37.768,
-    longitude: -122.425,
-    description:
-      'A generous chef-made plate with seasonal sides. Vegetarian options available today.',
+    latitude: 19.053,
+    longitude: 72.836,
+    description: 'A hearty home-style tiffin with seasonal sabzi, rice and fresh rotis.',
   },
 ];
 
@@ -152,8 +162,29 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
         if (!alive) return;
         if (raw) {
           const saved = JSON.parse(raw) as Partial<PersistedState>;
-          setListings(saved.listings ?? DEFAULT_LISTINGS);
-          setOrders(saved.orders ?? []);
+          const storedListings = saved.listings ?? DEFAULT_LISTINGS;
+          const localizedListings = storedListings.map((item) => {
+            const sample = DEFAULT_LISTINGS.find((defaultItem) => defaultItem.id === item.id);
+            if (sample) return { ...item, ...sample, quantity: item.quantity };
+            if (item.isMine && OLD_DEMO_AREAS.has(item.area)) {
+              return {
+                ...item,
+                area: 'Bandra West',
+                latitude: 19.0593,
+                longitude: 72.829,
+              };
+            }
+            return item;
+          });
+          const localizedOrders = (saved.orders ?? []).map((order) => {
+            const sample = DEFAULT_LISTINGS.find((item) => item.id === order.listingId);
+            return {
+              ...order,
+              area: sample?.area ?? (OLD_DEMO_AREAS.has(order.area) ? 'Bandra West' : order.area),
+            };
+          });
+          setListings(localizedListings);
+          setOrders(localizedOrders);
           setFavorites(saved.favorites ?? []);
           setMode(saved.mode ?? 'shopper');
         }
@@ -234,8 +265,8 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
         const nextListing: FoodListing = {
           ...listing,
           id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          latitude: 37.775,
-          longitude: -122.42,
+          latitude: 19.0593,
+          longitude: 72.829,
           distance: 'Nearby',
           isMine: true,
         };

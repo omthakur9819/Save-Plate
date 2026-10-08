@@ -49,7 +49,7 @@ export default function NearbyMap({ items, onMarkerPress }: NearbyMapProps) {
       })}
       <View style={[styles.mapLabel, { backgroundColor: colors.card }]}>
         <Feather name="map-pin" size={12} color={colors.primary} />
-        <Text style={[styles.mapLabelText, { color: colors.foreground }]}>Hayes Valley</Text>
+        <Text style={[styles.mapLabelText, { color: colors.foreground }]}>Bandra West</Text>
       </View>
       <View style={styles.schematicNote}>
         <Text style={styles.schematicNoteText}>NEIGHBORHOOD PREVIEW</Text>

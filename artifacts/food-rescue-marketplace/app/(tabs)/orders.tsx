@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMarketplace } from '@/context/MarketplaceContext';
+import { formatRupees, useMarketplace } from '@/context/MarketplaceContext';
 import { useColors } from '@/hooks/useColors';
 
 export default function PickupsScreen() {
@@ -65,7 +65,7 @@ export default function PickupsScreen() {
                   <Text style={[styles.orderName, { color: colors.foreground }]}>{order.listingName}</Text>
                   <Text style={[styles.vendor, { color: colors.mutedForeground }]}>{order.vendor}</Text>
                 </View>
-                <Text style={[styles.total, { color: colors.foreground }]}>${order.total}</Text>
+                <Text style={[styles.total, { color: colors.foreground }]}>{formatRupees(order.total)}</Text>
               </View>
               <View style={[styles.rule, { borderColor: colors.border }]} />
               <View style={styles.infoLine}>
@@ -128,7 +128,7 @@ export default function PickupsScreen() {
                   <Text style={[styles.pastName, { color: colors.foreground }]}>{order.listingName}</Text>
                   <Text style={[styles.pastVendor, { color: colors.mutedForeground }]}>{order.vendor}</Text>
                 </View>
-                <Text style={[styles.total, { color: colors.foreground }]}>${order.total}</Text>
+                <Text style={[styles.total, { color: colors.foreground }]}>{formatRupees(order.total)}</Text>
               </View>
             ))}
           </>

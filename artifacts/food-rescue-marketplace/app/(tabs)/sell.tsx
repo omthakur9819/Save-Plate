@@ -61,6 +61,7 @@ export default function VendorScreen() {
   const [name, setName] = useState('');
   const [vendor, setVendor] = useState('');
   const [category, setCategory] = useState<FoodCategory>('Bakery');
+  const [area, setArea] = useState('Bandra West');
   const [price, setPrice] = useState('');
   const [originalPrice, setOriginalPrice] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -73,6 +74,10 @@ export default function VendorScreen() {
     const portions = Number(quantity);
     if (!name.trim() || !vendor.trim()) {
       Alert.alert('A little more detail', 'Add a food name and your shop name first.');
+      return;
+    }
+    if (!area.trim()) {
+      Alert.alert('Add a pickup neighborhood', 'Shoppers need to know which Mumbai neighborhood to visit.');
       return;
     }
     if (
@@ -97,7 +102,7 @@ export default function VendorScreen() {
       originalPrice: regular,
       quantity: portions,
       pickupWindow: pickupWindow.trim() || 'Today, 5:00–6:00 PM',
-      area: 'Hayes Valley',
+      area: area.trim(),
       distance: 'Nearby',
       photo,
       description: `${name.trim()} from ${vendor.trim()}, available for a neighborhood pickup.`,
@@ -160,6 +165,7 @@ export default function VendorScreen() {
 
           <Field label="What’s available?" value={name} onChangeText={setName} placeholder="e.g. End-of-day pastry bag" testID="listing-name" />
           <Field label="Shop name" value={vendor} onChangeText={setVendor} placeholder="Your bakery or cafe" testID="vendor-name" />
+          <Field label="Pickup neighborhood" value={area} onChangeText={setArea} placeholder="e.g. Bandra West, Andheri" testID="pickup-area" />
 
           <Text style={[styles.label, { color: colors.foreground }]}>Food type</Text>
           <View style={styles.categories}>
@@ -185,10 +191,10 @@ export default function VendorScreen() {
 
           <View style={styles.priceRow}>
             <View style={{ flex: 1 }}>
-              <Field label="Your price" value={price} onChangeText={setPrice} placeholder="6" keyboardType="decimal-pad" prefix="$" testID="discount-price" />
+              <Field label="Your price" value={price} onChangeText={setPrice} placeholder="149" keyboardType="decimal-pad" prefix="₹" testID="discount-price" />
             </View>
             <View style={{ flex: 1 }}>
-              <Field label="Usual price" value={originalPrice} onChangeText={setOriginalPrice} placeholder="18" keyboardType="decimal-pad" prefix="$" testID="original-price" />
+              <Field label="Usual price" value={originalPrice} onChangeText={setOriginalPrice} placeholder="399" keyboardType="decimal-pad" prefix="₹" testID="original-price" />
             </View>
           </View>
           <View style={styles.priceRow}>
@@ -235,7 +241,7 @@ export default function VendorScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.liveName, { color: colors.foreground }]}>{item.name}</Text>
                 <Text style={[styles.liveMeta, { color: colors.mutedForeground }]}>
-                  {item.quantity > 0 ? `${item.quantity} portions left` : 'All picked up'} · ${item.price}
+                  {item.quantity > 0 ? `${item.quantity} portions left` : 'All picked up'} · ₹${item.price.toLocaleString('en-IN')}
                 </Text>
               </View>
               <Feather name={item.quantity > 0 ? 'radio' : 'check-circle'} size={16} color={colors.secondaryForeground} />
