@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface VendorFollow {
+  vendorId: string;
+  name: string;
+  area: string;
+  city: string;
+  followedAt: Date;
 }

@@ -3,13 +3,23 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Mumbai food rescue marketplace API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: listings
+    description: Food offers available in Mumbai
+  - name: orders
+    description: Shopper reservations and verified pickups
+  - name: vendors
+    description: Vendor follows, orders, and analytics
+  - name: messages
+    description: Buyer-vendor pickup chat
+  - name: notifications
+    description: Expo push notification device registration
 paths:
   /healthz:
     get:
@@ -24,6 +34,293 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Ensure and return the authenticated marketplace profile
+      responses:
+        "200":
+          description: Marketplace profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketplaceUser"
+  /listings:
+    get:
+      operationId: getListings
+      tags: [listings]
+      summary: Search and filter active Mumbai food listings
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: category
+          schema: { type: string }
+        - in: query
+          name: dietary
+          description: Match any supplied dietary tag
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { type: string }
+        - in: query
+          name: maxPrice
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: minDiscountPercent
+          schema: { type: integer, minimum: 0, maximum: 100 }
+        - in: query
+          name: maxDistanceKm
+          schema: { type: number, minimum: 0.1 }
+        - in: query
+          name: latitude
+          schema: { type: number, minimum: -90, maximum: 90 }
+        - in: query
+          name: longitude
+          schema: { type: number, minimum: -180, maximum: 180 }
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [distance, expiring, discount]
+      responses:
+        "200":
+          description: Matching food offers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FoodListing" }
+    post:
+      operationId: createListing
+      tags: [listings]
+      summary: Publish a discounted surplus food offer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateListingInput" }
+      responses:
+        "201":
+          description: Published listing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FoodListing" }
+  /orders:
+    get:
+      operationId: getOrders
+      tags: [orders]
+      summary: List the current shopper's pickup reservations
+      responses:
+        "200":
+          description: Shopper's orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PickupOrder" }
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Reserve available portions from a listing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateOrderInput" }
+      responses:
+        "201":
+          description: Reserved order including the shopper's pickup QR payload
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PickupOrder" }
+  /vendor/orders:
+    get:
+      operationId: getVendorOrders
+      tags: [vendors]
+      summary: List pickup reservations for the current vendor
+      responses:
+        "200":
+          description: Vendor's orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/VendorOrder" }
+  /vendor/listings:
+    get:
+      operationId: getVendorListings
+      tags: [vendors]
+      summary: List active and sold-out offers owned by the current vendor
+      responses:
+        "200":
+          description: Vendor's offers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FoodListing" }
+  /orders/{orderId}/status:
+    patch:
+      operationId: updateOrderStatus
+      tags: [orders]
+      summary: Move a vendor reservation to preparation or ready for pickup
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderStatusInput" }
+      responses:
+        "200":
+          description: Updated reservation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VendorOrder" }
+  /orders/verify-pickup:
+    post:
+      operationId: verifyPickup
+      tags: [orders]
+      summary: Verify a shopper's signed pickup QR and mark the order collected
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VerifyPickupInput" }
+      responses:
+        "200":
+          description: Verified and completed order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VendorOrder" }
+  /vendors/following:
+    get:
+      operationId: getFollowedVendors
+      tags: [vendors]
+      summary: List vendors followed by the current shopper
+      responses:
+        "200":
+          description: Followed shops
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/VendorFollow" }
+  /vendors/{vendorId}/follow:
+    put:
+      operationId: followVendor
+      tags: [vendors]
+      summary: Follow a local vendor and receive new-listing alerts
+      parameters:
+        - in: path
+          name: vendorId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Follow state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VendorFollow" }
+    delete:
+      operationId: unfollowVendor
+      tags: [vendors]
+      summary: Stop following a vendor
+      parameters:
+        - in: path
+          name: vendorId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Vendor unfollowed
+  /vendor/analytics:
+    get:
+      operationId: getVendorAnalytics
+      tags: [vendors]
+      summary: Summarize weekly or monthly confirmed waste-rescue sales
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [week, month]
+      responses:
+        "200":
+          description: Vendor performance summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VendorAnalytics" }
+  /orders/{orderId}/messages:
+    get:
+      operationId: getOrderMessages
+      tags: [messages]
+      summary: Read pickup chat for an order the user participates in
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Chat messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MarketplaceMessage" }
+    post:
+      operationId: sendOrderMessage
+      tags: [messages]
+      summary: Send a message to the other pickup participant
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendMessageInput" }
+      responses:
+        "201":
+          description: Sent message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MarketplaceMessage" }
+  /push-devices:
+    post:
+      operationId: registerPushDevice
+      tags: [notifications]
+      summary: Register an opted-in Expo push token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushDeviceInput" }
+      responses:
+        "204":
+          description: Push token registered
+    delete:
+      operationId: removePushDevice
+      tags: [notifications]
+      summary: Remove the current user's Expo push token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PushDeviceInput" }
+      responses:
+        "204":
+          description: Push token removed
 components:
   schemas:
     HealthStatus:
@@ -33,4 +330,203 @@ components:
           type: string
       required:
         - status
+    MarketplaceUser:
+      type: object
+      properties:
+        id: { type: string }
+      required: [id]
+    FoodListing:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        vendorId: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        vendor: { type: string }
+        category: { type: string }
+        price: { type: integer }
+        originalPrice: { type: integer }
+        quantity: { type: integer }
+        pickupWindow: { type: string }
+        area: { type: string }
+        distance: { type: string }
+        distanceKm: { type: number, nullable: true }
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+        dietaryTags:
+          type: array
+          items: { type: string }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        discountPercent: { type: integer }
+        photo: { type: string, enum: [bakery, lunch] }
+      required:
+        - id
+        - vendorId
+        - name
+        - description
+        - vendor
+        - category
+        - price
+        - originalPrice
+        - quantity
+        - pickupWindow
+        - area
+        - distance
+        - distanceKm
+        - latitude
+        - longitude
+        - dietaryTags
+        - expiresAt
+        - createdAt
+        - discountPercent
+        - photo
+    CreateListingInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
+        vendor: { type: string, minLength: 2, maxLength: 120 }
+        category: { type: string, enum: [Bakery, Cafe, Meals] }
+        price: { type: integer, minimum: 1 }
+        originalPrice: { type: integer, minimum: 1 }
+        quantity: { type: integer, minimum: 1, maximum: 500 }
+        pickupWindow: { type: string, minLength: 2, maxLength: 160 }
+        area: { type: string, minLength: 2, maxLength: 120 }
+        latitude: { type: number, minimum: -90, maximum: 90, nullable: true }
+        longitude: { type: number, minimum: -180, maximum: 180, nullable: true }
+        dietaryTags:
+          type: array
+          items:
+            type: string
+            enum: [vegan, vegetarian, halal, gluten-free, dairy-free, jain]
+        expiresAt: { type: string, format: date-time }
+        photo: { type: string, enum: [bakery, lunch] }
+      required:
+        - name
+        - description
+        - vendor
+        - category
+        - price
+        - originalPrice
+        - quantity
+        - pickupWindow
+        - area
+        - latitude
+        - longitude
+        - dietaryTags
+        - expiresAt
+        - photo
+    CreateOrderInput:
+      type: object
+      properties:
+        listingId: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1, maximum: 20 }
+      required: [listingId, quantity]
+    PickupOrder:
+      allOf:
+        - $ref: "#/components/schemas/VendorOrder"
+        - type: object
+          properties:
+            pickupQrPayload: { type: string, nullable: true }
+          required: [pickupQrPayload]
+    VendorOrder:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        listingId: { type: string, format: uuid }
+        vendorId: { type: string, format: uuid }
+        consumerUserId: { type: string }
+        listingName: { type: string }
+        vendor: { type: string }
+        pickupArea: { type: string }
+        pickupWindow: { type: string }
+        quantity: { type: integer }
+        unitPrice: { type: integer }
+        originalUnitPrice: { type: integer }
+        totalPrice: { type: integer }
+        status: { type: string, enum: [RESERVED, PREPARING, READY, PICKED_UP] }
+        createdAt: { type: string, format: date-time }
+        pickedUpAt: { type: string, format: date-time, nullable: true }
+      required:
+        - id
+        - listingId
+        - vendorId
+        - consumerUserId
+        - listingName
+        - vendor
+        - pickupArea
+        - pickupWindow
+        - quantity
+        - unitPrice
+        - originalUnitPrice
+        - totalPrice
+        - status
+        - createdAt
+        - pickedUpAt
+    OrderStatusInput:
+      type: object
+      properties:
+        status: { type: string, enum: [PREPARING, READY] }
+      required: [status]
+    VerifyPickupInput:
+      type: object
+      properties:
+        qrPayload: { type: string, minLength: 12, maxLength: 1000 }
+      required: [qrPayload]
+    VendorFollow:
+      type: object
+      properties:
+        vendorId: { type: string, format: uuid }
+        name: { type: string }
+        area: { type: string }
+        city: { type: string }
+        followedAt: { type: string, format: date-time }
+      required: [vendorId, name, area, city, followedAt]
+    VendorAnalytics:
+      type: object
+      properties:
+        period: { type: string, enum: [week, month] }
+        rescuedPortions: { type: integer }
+        confirmedRevenueInr: { type: integer }
+        customerSavingsInr: { type: integer }
+        orderCount: { type: integer }
+        topItems:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              portions: { type: integer }
+              revenueInr: { type: integer }
+            required: [name, portions, revenueInr]
+        peakOrderHours:
+          type: array
+          items:
+            type: object
+            properties:
+              hour: { type: integer }
+              orders: { type: integer }
+            required: [hour, orders]
+      required: [period, rescuedPortions, confirmedRevenueInr, customerSavingsInr, orderCount, topItems, peakOrderHours]
+    MarketplaceMessage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orderId: { type: string, format: uuid }
+        senderUserId: { type: string }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, orderId, senderUserId, body, createdAt]
+    SendMessageInput:
+      type: object
+      properties:
+        body: { type: string, minLength: 1, maxLength: 1000 }
+      required: [body]
+    PushDeviceInput:
+      type: object
+      properties:
+        token: { type: string, minLength: 10, maxLength: 500 }
+        platform: { type: string, enum: [ios, android] }
+      required: [token, platform]
 

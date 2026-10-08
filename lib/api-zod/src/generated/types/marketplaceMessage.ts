@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface MarketplaceMessage {
+  id: string;
+  orderId: string;
+  senderUserId: string;
+  body: string;
+  createdAt: Date;
 }

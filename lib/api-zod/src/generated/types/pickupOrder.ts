@@ -5,7 +5,8 @@
  * Mumbai food rescue marketplace API
  * OpenAPI spec version: 0.1.0
  */
+import type { VendorOrder } from './vendorOrder';
 
-export interface HealthStatus {
-  status: string;
-}
+export type PickupOrder = VendorOrder & ({
+  pickupQrPayload: string | null;
+});

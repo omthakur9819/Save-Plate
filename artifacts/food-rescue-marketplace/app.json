@@ -27,7 +27,9 @@
         {
           "locationWhenInUsePermission": "Use your location to find surplus food pickups close to you."
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

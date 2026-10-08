@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface VerifyPickupInput {
+  /**
+     * @minLength 12
+     * @maxLength 1000
+     */
+  qrPayload: string;
 }
