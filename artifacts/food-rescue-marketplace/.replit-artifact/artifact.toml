@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/"
+title = "Food Rescue Marketplace"
+description = "A two-sided mobile marketplace connecting local restaurants, bakeries, and cafes with people looking for discounted surplus food. Consumers discover nearby pickup offers, reserve and collect meals; vendors post available surplus before it goes to waste."
+version = "1.0.0"
+id = "artifacts/food-rescue-marketplace"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/" ]
+localPort = 18474
+
+[services.development]
+run = "pnpm --filter @workspace/food-rescue-marketplace run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/food-rescue-marketplace", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/food-rescue-marketplace", "run", "serve" ]
+
+[services.env]
+PORT = "18474"
+BASE_PATH = "/"

@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Food Rescue Marketplace",
+    "slug": "food-rescue-marketplace",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "food-rescue-marketplace",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#faf8f2"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Use your location to find surplus food pickups close to you."
+      }
+    },
+    "android": {},
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Use your location to find surplus food pickups close to you."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
