@@ -68,8 +68,8 @@ export default function ExploreScreen() {
         <InsetHeader>
           <View style={styles.topLine}>
             <View>
-              <Text style={[styles.eyebrow, { color: colors.secondaryForeground }]}>
-                GOOD FOOD, SECOND CHANCE
+              <Text style={[styles.eyebrow, { color: colors.primary }]}>
+                SAVE PLATE
               </Text>
               <Text style={[styles.location, { color: colors.foreground }]}>
                 Mumbai <Feather name="chevron-down" size={17} color={colors.foreground} />

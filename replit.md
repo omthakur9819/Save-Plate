@@ -1,6 +1,6 @@
-# [Project name]
+# Save Plate
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Save Plate is a surplus food rescue marketplace connecting consumers with local bakeries, cafes, and restaurants to rescue good food at discounted prices.
 
 ## Run & Operate
 

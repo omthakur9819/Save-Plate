@@ -9,6 +9,8 @@ import React, {
   useState,
 } from 'react';
 
+import { supabase } from '../lib/supabase';
+
 export type FoodCategory = 'Bakery' | 'Cafe' | 'Meals';
 export type ListingPhoto = 'bakery' | 'lunch';
 export type AppMode = 'shopper' | 'vendor';
@@ -231,8 +233,9 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
       placeOrder: async (listing, quantity = 1) => {
         const current = listings.find((item) => item.id === listing.id);
         if (!current || current.quantity < quantity || quantity < 1) return false;
+        const orderId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const order: PickupOrder = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          id: orderId,
           listingId: current.id,
           listingName: current.name,
           vendor: current.vendor,
@@ -249,6 +252,19 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
             : item,
         );
         save({ listings: nextListings, orders: [order, ...orders], favorites, mode });
+
+        // Optional Supabase background sync
+        supabase
+          .from('orders')
+          .insert({
+            quantity,
+            unit_price_inr: current.price,
+            total_price_inr: current.price * quantity,
+            pickup_window: current.pickupWindow,
+          })
+          .then(() => {})
+          .catch(() => {});
+
         return true;
       },
       markCollected: (id) => {
@@ -276,6 +292,24 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
           favorites,
           mode: 'vendor',
         });
+
+        // Optional Supabase background sync
+        supabase
+          .from('listings')
+          .insert({
+            name: listing.name,
+            description: listing.description,
+            category: listing.category,
+            price_inr: listing.price,
+            original_price_inr: listing.originalPrice,
+            quantity: listing.quantity,
+            pickup_window: listing.pickupWindow,
+            area: listing.area,
+            is_active: true,
+            expires_at: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
+          })
+          .then(() => {})
+          .catch(() => {});
       },
     }),
     [favorites, isReady, listings, mode, orders, save, storageError],

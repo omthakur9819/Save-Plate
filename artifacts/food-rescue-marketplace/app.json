@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Food Rescue Marketplace",
-    "slug": "food-rescue-marketplace",
+    "name": "Save Plate",
+    "slug": "save-plate",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "food-rescue-marketplace",
+    "scheme": "save-plate",
     "userInterfaceStyle": "automatic",
     "splash": {
       "backgroundColor": "#faf8f2"
