@@ -15,6 +15,8 @@ export default function NearbyMap({
   onMarkerPress,
   center,
   showUserLocation,
+  selectedId,
+  onSelectMarker,
 }: NearbyMapProps) {
   const mapRef = useRef<MapView>(null);
 
@@ -42,7 +44,11 @@ export default function NearbyMap({
           coordinate={{ latitude: item.latitude, longitude: item.longitude }}
           title={`${item.name} · ₹${item.price}`}
           description={`${item.vendor} · ${item.area}`}
-          onPress={() => onMarkerPress(item)}
+          onPress={() => {
+            onSelectMarker?.(item);
+            onMarkerPress(item);
+          }}
+          pinColor={item.id === selectedId ? '#e2764d' : undefined}
           testID={`map-marker-${item.id}`}
         />
       ))}

@@ -262,8 +262,7 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
             total_price_inr: current.price * quantity,
             pickup_window: current.pickupWindow,
           })
-          .then(() => {})
-          .catch(() => {});
+          .then(() => {}, () => {});
 
         return true;
       },
@@ -308,8 +307,7 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
             is_active: true,
             expires_at: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
           })
-          .then(() => {})
-          .catch(() => {});
+          .then(() => {}, () => {});
       },
     }),
     [favorites, isReady, listings, mode, orders, save, storageError],

@@ -5,4 +5,6 @@ export interface NearbyMapProps {
   onMarkerPress: (item: FoodListing) => void;
   center: { latitude: number; longitude: number } | null;
   showUserLocation: boolean;
+  selectedId?: string | null;
+  onSelectMarker?: (item: FoodListing) => void;
 }
