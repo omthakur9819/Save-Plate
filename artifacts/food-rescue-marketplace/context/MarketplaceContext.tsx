@@ -54,6 +54,9 @@ export interface PickupOrder {
   area: string;
   placedAt: string;
   collected: boolean;
+  paymentMethod?: 'razorpay' | 'pay_at_pickup';
+  paymentId?: string;
+  paymentStatus?: 'PAID' | 'PAY_AT_PICKUP';
 }
 
 interface PersistedState {
@@ -68,7 +71,11 @@ interface MarketplaceValue extends PersistedState {
   storageError: boolean;
   setMode: (mode: AppMode) => void;
   toggleFavorite: (id: string) => void;
-  placeOrder: (listing: FoodListing, quantity?: number) => Promise<boolean>;
+  placeOrder: (
+    listing: FoodListing,
+    quantity?: number,
+    payment?: { paymentMethod: 'razorpay' | 'pay_at_pickup'; paymentId?: string },
+  ) => Promise<boolean>;
   markCollected: (id: string) => void;
   addListing: (
     listing: Omit<FoodListing, 'id' | 'latitude' | 'longitude' | 'isMine'> & {
@@ -430,11 +437,13 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
           : [...cur, id];
         save({ favorites: nextFavorites });
       },
-      placeOrder: async (listing, quantity = 1) => {
+      placeOrder: async (listing, quantity = 1, payment) => {
         const curListings = listingsRef.current;
         const current = curListings.find((item) => item.id === listing.id);
         if (!current || current.quantity < quantity || quantity < 1) return false;
         const orderId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const paymentMethod = payment?.paymentMethod || 'pay_at_pickup';
+        const paymentStatus = paymentMethod === 'razorpay' ? 'PAID' : 'PAY_AT_PICKUP';
         const order: PickupOrder = {
           id: orderId,
           listingId: current.id,
@@ -446,6 +455,9 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
           area: current.area,
           placedAt: new Date().toISOString(),
           collected: false,
+          paymentMethod,
+          paymentId: payment?.paymentId,
+          paymentStatus,
         };
         const nextListings = curListings.map((item) =>
           item.id === current.id

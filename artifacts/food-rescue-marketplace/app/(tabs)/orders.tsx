@@ -67,6 +67,26 @@ export default function PickupsScreen() {
                 </View>
                 <Text style={[styles.total, { color: colors.foreground }]}>{formatRupees(order.total)}</Text>
               </View>
+
+              {/* Payment Status Pill */}
+              <View style={styles.paymentBadgeRow}>
+                {order.paymentStatus === 'PAID' ? (
+                  <View style={[styles.paymentBadge, { backgroundColor: '#eaf5ee', borderColor: '#b8e2c8' }]}>
+                    <Feather name="check-circle" size={11} color="#15803d" />
+                    <Text style={[styles.paymentBadgeText, { color: '#166534' }]}>
+                      PAID ONLINE · Razorpay {order.paymentId ? `(${order.paymentId.slice(0, 14)}...)` : ''}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.paymentBadge, { backgroundColor: '#fef9c3', borderColor: '#fde047' }]}>
+                    <Feather name="clock" size={11} color="#854d0e" />
+                    <Text style={[styles.paymentBadgeText, { color: '#854d0e' }]}>
+                      PAY {formatRupees(order.total)} AT PICKUP COUNTER
+                    </Text>
+                  </View>
+                )}
+              </View>
+
               <View style={[styles.rule, { borderColor: colors.border }]} />
               <View style={styles.infoLine}>
                 <Feather name="clock" size={14} color={colors.primary} />
@@ -128,7 +148,12 @@ export default function PickupsScreen() {
                   <Text style={[styles.pastName, { color: colors.foreground }]}>{order.listingName}</Text>
                   <Text style={[styles.pastVendor, { color: colors.mutedForeground }]}>{order.vendor}</Text>
                 </View>
-                <Text style={[styles.total, { color: colors.foreground }]}>{formatRupees(order.total)}</Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.total, { color: colors.foreground }]}>{formatRupees(order.total)}</Text>
+                  <Text style={[styles.pastPayStatus, { color: order.paymentStatus === 'PAID' ? '#15803d' : colors.mutedForeground }]}>
+                    {order.paymentStatus === 'PAID' ? 'Paid (Razorpay)' : 'Paid at counter'}
+                  </Text>
+                </View>
               </View>
             ))}
           </>
@@ -149,6 +174,10 @@ const styles = StyleSheet.create({
   orderName: { fontSize: 14, fontWeight: '700' },
   vendor: { fontSize: 11, marginTop: 3 },
   total: { fontSize: 16, fontWeight: '800' },
+  paymentBadgeRow: { marginTop: 10 },
+  paymentBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, borderWidth: 1, alignSelf: 'flex-start' },
+  paymentBadgeText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  pastPayStatus: { fontSize: 9, fontWeight: '700', marginTop: 2 },
   rule: { borderBottomWidth: 1, borderStyle: 'dashed', marginVertical: 14 },
   infoLine: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 9 },
   infoText: { fontSize: 12, fontWeight: '600' },
