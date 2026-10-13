@@ -72,7 +72,10 @@ export default function ListingDetailScreen() {
         contentContainerStyle={{ paddingBottom: Platform.OS === 'web' ? 120 : Math.max(insets.bottom, 12) + 115 }}
       >
         <View style={styles.hero}>
-          <Image source={photos[listing.photo]} style={styles.heroImage} />
+          <Image
+            source={listing.imageUri ? { uri: listing.imageUri } : photos[listing.photo]}
+            style={styles.heroImage}
+          />
           <View style={[styles.heroTop, { paddingTop: topInset + 5 }]}>
             <Pressable
               onPress={() => router.back()}

@@ -1,8 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
-import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
@@ -44,12 +44,29 @@ export default function NearbyMapScreen() {
   const [category, setCategory] = useState<FoodCategory | 'All'>('All');
   const [selectedArea, setSelectedArea] = useState<string>('All');
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
+  const [myOffersOnly, setMyOffersOnly] = useState(false);
 
+  const params = useLocalSearchParams<{ spotlight?: string }>();
   const [userCenter, setUserCenter] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'located' | 'denied'>('idle');
   const [permission, requestPermission] = Location.useForegroundPermissions();
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
+
+  // React to spotlight navigation parameter (e.g. from offer creation in My Food)
+  useEffect(() => {
+    if (params.spotlight) {
+      const match = listings.find((item) => item.id === params.spotlight);
+      if (match) {
+        setSelectedListingId(match.id);
+        setUserCenter({ latitude: match.latitude, longitude: match.longitude });
+        setSearch('');
+        setCategory('All');
+        setSelectedArea('All');
+        setMyOffersOnly(false);
+      }
+    }
+  }, [params.spotlight, listings]);
 
   // Extract all distinct neighborhood areas
   const uniqueAreas = useMemo(() => {
@@ -60,11 +77,19 @@ export default function NearbyMapScreen() {
     return ['All', ...Array.from(areas)];
   }, [listings]);
 
-  // Filter listings based on search, category, and area
+  const myOffersCount = useMemo(
+    () => listings.filter((item) => item.isMine && item.quantity > 0).length,
+    [listings],
+  );
+
   const available = useMemo(() => {
+    console.log('[NearbyMapScreen] map has total listings:', listings.length, 'myOffersCount:', myOffersCount);
     const query = search.trim().toLowerCase();
     return listings.filter((item) => {
       if (item.quantity <= 0) return false;
+
+      // Filter by My Offers
+      if (myOffersOnly && !item.isMine) return false;
 
       // Category filter
       if (category !== 'All' && item.category !== category) return false;
@@ -88,7 +113,7 @@ export default function NearbyMapScreen() {
 
       return true;
     });
-  }, [listings, search, category, selectedArea]);
+  }, [listings, search, category, selectedArea, myOffersOnly]);
 
   // Currently focused listing on the map
   const selectedListing = useMemo(() => {
@@ -125,6 +150,7 @@ export default function NearbyMapScreen() {
     setSearch('');
     setCategory('All');
     setSelectedArea('All');
+    setMyOffersOnly(false);
     setSelectedListingId(null);
     Haptics.selectionAsync();
   };
@@ -192,6 +218,7 @@ export default function NearbyMapScreen() {
             <Text style={[styles.title, { color: colors.foreground }]}>A little closer</Text>
             <Text style={[styles.caption, { color: colors.mutedForeground }]}>
               {available.length} {available.length === 1 ? 'spot' : 'spots'} available nearby
+              {myOffersCount > 0 ? ` · ${myOffersCount} from your shop` : ''}
             </Text>
           </View>
           <Pressable
@@ -251,6 +278,35 @@ export default function NearbyMapScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterChips}
         >
+          {myOffersCount > 0 && (
+            <Pressable
+              onPress={() => {
+                setMyOffersOnly((prev) => !prev);
+                setSelectedListingId(null);
+                Haptics.selectionAsync();
+              }}
+              style={[
+                styles.filterChip,
+                {
+                  backgroundColor: myOffersOnly ? '#2b8253' : colors.card,
+                  borderColor: myOffersOnly ? '#2b8253' : '#2b8253',
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Show only my posted offers"
+            >
+              <Feather name="star" size={12} color={myOffersOnly ? '#ffffff' : '#2b8253'} />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  { color: myOffersOnly ? '#ffffff' : '#2b8253', fontWeight: '700' },
+                ]}
+              >
+                My Food ({myOffersCount})
+              </Text>
+            </Pressable>
+          )}
+
           {categories.map((cat) => {
             const active = category === cat;
             return (
@@ -364,15 +420,28 @@ export default function NearbyMapScreen() {
             ]}
           >
             <Image
-              source={photos[selectedListing.photo]}
+              source={selectedListing.imageUri ? { uri: selectedListing.imageUri } : photos[selectedListing.photo]}
               style={styles.spotlightImage}
               resizeMode="cover"
             />
             <View style={styles.spotlightContent}>
               <View style={styles.spotlightTop}>
-                <Text style={[styles.spotlightVendor, { color: colors.primary }]} numberOfLines={1}>
-                  {selectedListing.vendor}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <Text
+                    style={[
+                      styles.spotlightVendor,
+                      { color: selectedListing.isMine ? '#2b8253' : colors.primary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {selectedListing.vendor}
+                  </Text>
+                  {selectedListing.isMine && (
+                    <View style={styles.spotlightMineBadge}>
+                      <Text style={styles.spotlightMineBadgeText}>YOUR LIVE OFFER</Text>
+                    </View>
+                  )}
+                </View>
                 <Pressable
                   onPress={() => setSelectedListingId(null)}
                   hitSlop={8}
@@ -566,6 +635,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  spotlightMineBadge: {
+    backgroundColor: '#2b8253',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  spotlightMineBadgeText: {
+    color: '#ffffff',
+    fontSize: 7.5,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   spotlightName: {

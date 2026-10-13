@@ -52,7 +52,11 @@ export function ListingCard({
           onPress={onPress}
           style={({ pressed }) => [styles.imageTap, pressed && styles.pressed]}
         >
-          <Image source={photos[listing.photo]} style={styles.image} resizeMode="cover" />
+          <Image
+            source={listing.imageUri ? { uri: listing.imageUri } : photos[listing.photo]}
+            style={styles.image}
+            resizeMode="cover"
+          />
           <View style={styles.discount}>
             <Text style={styles.discountText}>{discount}% off</Text>
           </View>

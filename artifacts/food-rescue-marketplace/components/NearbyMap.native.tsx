@@ -42,13 +42,13 @@ export default function NearbyMap({
         <Marker
           key={item.id}
           coordinate={{ latitude: item.latitude, longitude: item.longitude }}
-          title={`${item.name} · ₹${item.price}`}
+          title={`${item.name} · ₹${item.price}${item.isMine ? ' (Your Offer)' : ''}`}
           description={`${item.vendor} · ${item.area}`}
           onPress={() => {
             onSelectMarker?.(item);
             onMarkerPress(item);
           }}
-          pinColor={item.id === selectedId ? '#e2764d' : undefined}
+          pinColor={item.isMine ? '#2b8253' : (item.id === selectedId ? '#e2764d' : undefined)}
           testID={`map-marker-${item.id}`}
         />
       ))}

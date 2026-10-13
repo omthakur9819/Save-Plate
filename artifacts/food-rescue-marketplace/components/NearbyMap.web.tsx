@@ -36,21 +36,44 @@ export default function NearbyMap({
     const latSpan = Math.max(maxLat - minLat, 0.012);
     const lngSpan = Math.max(maxLng - minLng, 0.012);
 
-    return items.map((item, idx) => {
+    const positions: Array<{ left: string; top: string }> = [];
+
+    items.forEach((item, idx) => {
       if (typeof item.latitude !== 'number' || typeof item.longitude !== 'number') {
-        return DEFAULT_POSITIONS[idx % DEFAULT_POSITIONS.length];
+        positions.push(DEFAULT_POSITIONS[idx % DEFAULT_POSITIONS.length]);
+        return;
       }
       const normX = (item.longitude - minLng) / lngSpan;
-      const leftVal = Math.min(84, Math.max(16, 18 + normX * 64));
+      let leftVal = Math.min(84, Math.max(16, 18 + normX * 64));
 
       const normY = (item.latitude - minLat) / latSpan;
-      const topVal = Math.min(80, Math.max(24, 80 - normY * 56));
+      let topVal = Math.min(80, Math.max(24, 80 - normY * 56));
 
-      return {
+      // Prevent overlapping markers at the same spot
+      let attempts = 0;
+      while (attempts < 8) {
+        const tooClose = positions.some((p) => {
+          const pLeft = parseFloat(p.left);
+          const pTop = parseFloat(p.top);
+          return Math.abs(pLeft - leftVal) < 6.5 && Math.abs(pTop - topVal) < 6.5;
+        });
+        if (tooClose) {
+          const angle = (attempts * Math.PI) / 4;
+          leftVal = Math.min(84, Math.max(16, leftVal + Math.cos(angle) * 7.5));
+          topVal = Math.min(80, Math.max(24, topVal + Math.sin(angle) * 7.5));
+          attempts++;
+        } else {
+          break;
+        }
+      }
+
+      positions.push({
         left: `${leftVal.toFixed(1)}%`,
         top: `${topVal.toFixed(1)}%`,
-      };
+      });
     });
+
+    return positions;
   }, [items]);
 
   const activeAreaLabel = useMemo(() => {
@@ -80,6 +103,7 @@ export default function NearbyMap({
       {items.map((item, index) => {
         const point = markerPositions[index] || DEFAULT_POSITIONS[index % DEFAULT_POSITIONS.length];
         const isSelected = selectedId === item.id;
+        const isMine = !!item.isMine;
 
         return (
           <Pressable
@@ -98,17 +122,24 @@ export default function NearbyMap({
               {
                 left: point.left as DimensionValue,
                 top: point.top as DimensionValue,
-                zIndex: isSelected ? 30 : 10,
+                zIndex: isSelected ? 30 : (isMine ? 20 : 10),
               },
             ]}
             testID={`map-marker-${item.id}`}
           >
             {isSelected && (
               <View style={[styles.tooltip, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.tooltipVendor, { color: colors.foreground }]} numberOfLines={1}>
-                  {item.vendor}
-                </Text>
-                <Text style={[styles.tooltipPrice, { color: colors.primary }]} numberOfLines={1}>
+                <View style={styles.tooltipHeader}>
+                  <Text style={[styles.tooltipVendor, { color: colors.foreground }]} numberOfLines={1}>
+                    {item.vendor}
+                  </Text>
+                  {isMine && (
+                    <View style={styles.mineTag}>
+                      <Text style={styles.mineTagText}>YOURS</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={[styles.tooltipPrice, { color: isMine ? '#2b8253' : colors.primary }]} numberOfLines={1}>
                   ₹{item.price} · {item.name}
                 </Text>
                 <View style={[styles.tooltipArrow, { borderTopColor: colors.card }]} />
@@ -118,21 +149,21 @@ export default function NearbyMap({
             <View
               style={[
                 styles.markerHalo,
-                { backgroundColor: `${colors.primary}36` },
-                isSelected && styles.markerHaloSelected,
+                { backgroundColor: isMine ? 'rgba(43, 130, 83, 0.28)' : `${colors.primary}36` },
+                isSelected && (isMine ? styles.markerHaloSelectedMine : styles.markerHaloSelected),
               ]}
             >
               <View
                 style={[
                   styles.markerDot,
-                  { backgroundColor: colors.primary },
+                  { backgroundColor: isMine ? '#2b8253' : colors.primary },
                   isSelected && styles.markerDotSelected,
                 ]}
               >
                 <Feather
-                  name="shopping-bag"
+                  name={isMine ? 'star' : 'shopping-bag'}
                   size={isSelected ? 13 : 11}
-                  color={colors.primaryForeground}
+                  color="#ffffff"
                 />
               </View>
             </View>
@@ -165,14 +196,15 @@ const styles = StyleSheet.create({
   marker: { position: 'absolute', transform: [{ translateX: -16 }, { translateY: -16 }] },
   markerHalo: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   markerHaloSelected: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(226, 118, 77, 0.45)', transform: [{ translateX: -5 }, { translateY: -5 }] },
+  markerHaloSelectedMine: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(43, 130, 83, 0.45)', transform: [{ translateX: -5 }, { translateY: -5 }] },
   markerDot: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#ffffff' },
   markerDotSelected: { width: 28, height: 28, borderRadius: 14, borderWidth: 2.5 },
   tooltip: {
     position: 'absolute',
     bottom: 38,
     left: '50%',
-    transform: [{ translateX: -70 }],
-    width: 140,
+    transform: [{ translateX: -75 }],
+    width: 150,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 8,
@@ -184,7 +216,24 @@ const styles = StyleSheet.create({
     elevation: 4,
     alignItems: 'center',
   },
+  tooltipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   tooltipVendor: { fontSize: 10, fontWeight: '700' },
+  mineTag: {
+    backgroundColor: '#2b8253',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  mineTagText: {
+    color: '#ffffff',
+    fontSize: 7,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   tooltipPrice: { fontSize: 9, fontWeight: '600', marginTop: 1 },
   tooltipArrow: {
     position: 'absolute',
