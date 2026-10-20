@@ -48,10 +48,27 @@ export default function NearbyMapScreen() {
 
   const params = useLocalSearchParams<{ spotlight?: string }>();
   const [userCenter, setUserCenter] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [pageScrollEnabled, setPageScrollEnabled] = useState(true);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'located' | 'denied'>('idle');
   const [permission, requestPermission] = Location.useForegroundPermissions();
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
+
+  // Silently check last known position if permission is already granted
+  useEffect(() => {
+    if (permission?.granted && !userLocation) {
+      Location.getLastKnownPositionAsync({})
+        .then((pos) => {
+          if (pos?.coords) {
+            const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+            setUserLocation(loc);
+            setLocationStatus('located');
+          }
+        })
+        .catch(() => {});
+    }
+  }, [permission?.granted]);
 
   // React to spotlight navigation parameter (e.g. from offer creation in My Food)
   useEffect(() => {
@@ -164,7 +181,9 @@ export default function NearbyMapScreen() {
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => {
           setLocationStatus('located');
-          setUserCenter({ latitude: coords.latitude, longitude: coords.longitude });
+          const pos = { latitude: coords.latitude, longitude: coords.longitude };
+          setUserLocation(pos);
+          setUserCenter(pos);
         },
         () => setLocationStatus('denied'),
         { enableHighAccuracy: true, timeout: 10000 },
@@ -180,12 +199,14 @@ export default function NearbyMapScreen() {
     }
     try {
       const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.High,
       });
-      setUserCenter({
+      const pos = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
-      });
+      };
+      setUserLocation(pos);
+      setUserCenter(pos);
       setLocationStatus('located');
       Haptics.selectionAsync();
     } catch {
@@ -204,6 +225,8 @@ export default function NearbyMapScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
+        scrollEnabled={pageScrollEnabled}
+        nestedScrollEnabled={true}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
@@ -388,14 +411,27 @@ export default function NearbyMapScreen() {
         ) : null}
 
         {/* Map View */}
-        <NearbyMap
-          items={available}
-          onMarkerPress={openListing}
-          onSelectMarker={handleSelectMarker}
-          selectedId={selectedListingId}
-          center={userCenter}
-          showUserLocation={!!permission?.granted}
-        />
+        <View
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderGrant={() => setPageScrollEnabled(false)}
+          onResponderRelease={() => setPageScrollEnabled(true)}
+          onResponderTerminate={() => setPageScrollEnabled(true)}
+          onTouchStart={() => setPageScrollEnabled(false)}
+          onTouchEnd={() => setPageScrollEnabled(true)}
+          onTouchCancel={() => setPageScrollEnabled(true)}
+        >
+          <NearbyMap
+            items={available}
+            onMarkerPress={openListing}
+            onSelectMarker={handleSelectMarker}
+            selectedId={selectedListingId}
+            center={userCenter}
+            userLocation={userLocation}
+            showUserLocation={!!permission?.granted}
+            onLocateMe={locateMe}
+          />
+        </View>
 
         {/* Map Hint / Legend */}
         <View style={styles.mapHint}>
