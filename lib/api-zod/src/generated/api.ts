@@ -9,6 +9,37 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Convert natural language query into structured filters
+ */
+export const parseNaturalSearchBodyQueryMax = 200;
+
+
+
+export const ParseNaturalSearchBody = zod.object({
+  "query": zod.string().max(parseNaturalSearchBodyQueryMax),
+  "now": zod.coerce.date(),
+  "timezone": zod.string()
+})
+
+export const parseNaturalSearchResponseKeywordsDefault = [];
+export const parseNaturalSearchResponseDietDefault = [];
+export const parseNaturalSearchResponseNearMeDefault = false;
+export const parseNaturalSearchResponseSortByDefault = `distance`;
+
+export const ParseNaturalSearchResponse = zod.object({
+  "keywords": zod.array(zod.string()).default(parseNaturalSearchResponseKeywordsDefault),
+  "category": zod.enum(['bakery', 'cafe', 'meals']).optional(),
+  "diet": zod.array(zod.enum(['veg', 'vegan', 'egg_free', 'nut_free'])).default(parseNaturalSearchResponseDietDefault),
+  "maxPrice": zod.number().optional(),
+  "area": zod.string().optional(),
+  "nearMe": zod.boolean().default(parseNaturalSearchResponseNearMeDefault),
+  "maxDistanceKm": zod.number().optional(),
+  "pickupAfter": zod.coerce.date().optional(),
+  "sortBy": zod.enum(['distance', 'price', 'ending_soon']).default(parseNaturalSearchResponseSortByDefault)
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */
@@ -228,6 +259,34 @@ export const GetVendorOrdersResponseItem = zod.object({
   "pickedUpAt": zod.coerce.date().nullable()
 })
 export const GetVendorOrdersResponse = zod.array(GetVendorOrdersResponseItem)
+
+
+/**
+ * @summary List active and sold-out offers owned by the current vendor
+ */
+export const GetVendorListingsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "vendorId": zod.string().uuid(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "vendor": zod.string(),
+  "category": zod.string(),
+  "price": zod.number().int(),
+  "originalPrice": zod.number().int(),
+  "quantity": zod.number().int(),
+  "pickupWindow": zod.string(),
+  "area": zod.string(),
+  "distance": zod.string(),
+  "distanceKm": zod.number().nullable(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable(),
+  "dietaryTags": zod.array(zod.string()),
+  "expiresAt": zod.coerce.date(),
+  "createdAt": zod.coerce.date(),
+  "discountPercent": zod.number().int(),
+  "photo": zod.enum(['bakery', 'lunch'])
+})
+export const GetVendorListingsResponse = zod.array(GetVendorListingsResponseItem)
 
 
 /**

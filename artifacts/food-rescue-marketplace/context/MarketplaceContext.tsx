@@ -59,16 +59,94 @@ export interface PickupOrder {
   paymentStatus?: 'PAID' | 'PAY_AT_PICKUP';
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: 'shopper' | 'vendor';
+  restaurantName?: string;
+  area?: string;
+  phone?: string;
+  savedMoneyInr?: number;
+  mealsRescued?: number;
+}
+
+export interface RestaurantGroup {
+  id: string;
+  name: string;
+  category: FoodCategory;
+  area: string;
+  distance: string;
+  latitude: number;
+  longitude: number;
+  rating: number;
+  ratingCount: number;
+  coverImage?: string;
+  dishes: FoodListing[];
+  pickupWindow: string;
+}
+
+export const DEMO_SHOPPER: UserProfile = {
+  id: 'demo-shopper-1',
+  name: 'Aarav Sharma',
+  email: 'aarav.sharma@gmail.com',
+  role: 'shopper',
+  area: 'Bandra West',
+  savedMoneyInr: 1450,
+  mealsRescued: 8,
+};
+
+export const DEMO_VENDORS: UserProfile[] = [
+  {
+    id: 'demo-vendor-veronicas',
+    name: 'Chef Daniel & Team',
+    email: 'ranwar@veronicasbandra.com',
+    role: 'vendor',
+    restaurantName: "Veronica's Bandra",
+    area: 'Bandra West',
+  },
+  {
+    id: 'demo-vendor-1',
+    name: 'Kabir Bakshi',
+    email: 'kabir@bandrabread.in',
+    role: 'vendor',
+    restaurantName: 'Bandra Bread Room',
+    area: 'Bandra West',
+  },
+  {
+    id: 'demo-vendor-2',
+    name: 'Pooja Mehta',
+    email: 'pooja@mangoleaf.in',
+    role: 'vendor',
+    restaurantName: 'Mango Leaf Cafe',
+    area: 'Khar West',
+  },
+  {
+    id: 'demo-vendor-3',
+    name: 'Ramesh Patel',
+    email: 'ramesh@dabbaco.in',
+    role: 'vendor',
+    restaurantName: 'Dabba & Co.',
+    area: 'Bandra West',
+  },
+];
+
 interface PersistedState {
   listings: FoodListing[];
   orders: PickupOrder[];
   favorites: string[];
   mode: AppMode;
+  currentUser?: UserProfile | null;
 }
 
 interface MarketplaceValue extends PersistedState {
   isReady: boolean;
   storageError: boolean;
+  currentUser: UserProfile | null;
+  restaurants: RestaurantGroup[];
+  login: (profile: UserProfile) => void;
+  logout: () => void;
+  register: (profile: Omit<UserProfile, 'id'>) => UserProfile;
   setMode: (mode: AppMode) => void;
   toggleFavorite: (id: string) => void;
   placeOrder: (
@@ -85,7 +163,7 @@ interface MarketplaceValue extends PersistedState {
   ) => string;
 }
 
-const STORAGE_KEY = '@goodagain/marketplace-v1';
+const STORAGE_KEY = '@goodagain/marketplace-v3';
 const OLD_DEMO_AREAS = new Set([
   'Hayes Valley',
   'Lower Haight',
@@ -166,6 +244,7 @@ export const MUMBAI_NEIGHBORHOOD_COORDS: Record<string, { latitude: number; long
   'thane': { latitude: 19.2183, longitude: 72.9781 },
   'vashi': { latitude: 19.0771, longitude: 72.9986 },
   'navi mumbai': { latitude: 19.0330, longitude: 73.0297 },
+  'panvel': { latitude: 18.9894, longitude: 73.1175 },
 };
 
 export const POPULAR_MUMBAI_AREAS = [
@@ -192,6 +271,7 @@ export const POPULAR_MUMBAI_AREAS = [
   'Borivali',
   'Thane',
   'Vashi',
+  'Panvel',
 ] as const;
 
 export function getCoordinatesForArea(
@@ -201,11 +281,9 @@ export function getCoordinatesForArea(
   const clean = (area || '').trim().toLowerCase();
   let base = { latitude: 19.0596, longitude: 72.8295 };
 
-  // 1. Direct key match
   if (MUMBAI_NEIGHBORHOOD_COORDS[clean]) {
     base = MUMBAI_NEIGHBORHOOD_COORDS[clean];
   } else {
-    // 2. Substring match
     for (const [key, coords] of Object.entries(MUMBAI_NEIGHBORHOOD_COORDS)) {
       if (clean.includes(key) || key.includes(clean)) {
         base = coords;
@@ -214,12 +292,10 @@ export function getCoordinatesForArea(
     }
   }
 
-  // Exact coordinates requested (default when seed is 0 or undefined)
   if (!seed || seed === 0) {
     return { latitude: base.latitude, longitude: base.longitude };
   }
 
-  // Small micro-offset (~50m) only when explicitly seeding distinct mock listings
   const seedStr = `${clean}-${seed}`;
   let hash = 0;
   for (let i = 0; i < seedStr.length; i++) {
@@ -234,9 +310,12 @@ export function getCoordinatesForArea(
     longitude: Number((base.longitude + lngOffset).toFixed(5)),
   };
 }
+
+// Default seed listings: each restaurant has multiple delicious surplus dishes
 const DEFAULT_LISTINGS: FoodListing[] = [
+  // Restaurant 1: Bandra Bread Room (3 dishes)
   {
-    id: 'seed-bakery',
+    id: 'bbr-surprise-bag',
     name: 'Surprise bakery bag',
     vendor: 'Bandra Bread Room',
     category: 'Bakery',
@@ -247,12 +326,49 @@ const DEFAULT_LISTINGS: FoodListing[] = [
     area: 'Bandra West',
     distance: '0.5 km',
     photo: 'bakery',
+    imageUri: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=600&q=80',
     latitude: 19.0593,
     longitude: 72.829,
-    description: 'A happy mix of today’s extra pastries and bread. Expect a little surprise in every bag.',
+    description: 'A happy mix of today’s extra sourdough, croissants, and butter brioche. Freshly baked this morning.',
   },
   {
-    id: 'seed-lunch',
+    id: 'bbr-pastry-box',
+    name: 'Assorted pastry box',
+    vendor: 'Bandra Bread Room',
+    category: 'Bakery',
+    price: 199,
+    originalPrice: 549,
+    quantity: 2,
+    pickupWindow: 'Today, 6:00–7:00 PM',
+    area: 'Bandra West',
+    distance: '0.5 km',
+    photo: 'bakery',
+    imageUri: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.0593,
+    longitude: 72.829,
+    description: 'Four decadent assorted tarts, chocolate eclairs, and fruit Danishes packed right before closing.',
+  },
+  {
+    id: 'bbr-sourdough-focaccia',
+    name: 'Artisan Sourdough & Herb Focaccia',
+    vendor: 'Bandra Bread Room',
+    category: 'Bakery',
+    price: 129,
+    originalPrice: 340,
+    quantity: 3,
+    pickupWindow: 'Today, 6:30–7:30 PM',
+    area: 'Bandra West',
+    distance: '0.5 km',
+    photo: 'bakery',
+    imageUri: 'https://images.unsplash.com/photo-1586444248902-2f64eddc13df?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.0593,
+    longitude: 72.829,
+    description: 'Crusty rustic sourdough loaf accompanied by olive oil rosemary sea salt focaccia.',
+  },
+
+  // Restaurant 2: Mango Leaf Cafe (3 dishes)
+  {
+    id: 'mlc-harvest-bowl',
     name: 'Monsoon harvest lunch bowl',
     vendor: 'Mango Leaf Cafe',
     category: 'Cafe',
@@ -263,28 +379,49 @@ const DEFAULT_LISTINGS: FoodListing[] = [
     area: 'Khar West',
     distance: '1.5 km',
     photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80',
     latitude: 19.067,
     longitude: 72.832,
-    description: 'A fresh seasonal grain bowl with roasted vegetables, herbs and a little loaf of house bread.',
+    description: 'A fresh seasonal grain bowl with roasted sweet potato, kale, edamame and lemon tahini drizzle.',
   },
   {
-    id: 'seed-pastry',
-    name: 'Assorted pastry box',
-    vendor: 'Bandra Bread Room',
-    category: 'Bakery',
-    price: 199,
-    originalPrice: 549,
+    id: 'mlc-matcha-croissant',
+    name: 'Iced Cold Brew & Cinnamon Roll',
+    vendor: 'Mango Leaf Cafe',
+    category: 'Cafe',
+    price: 129,
+    originalPrice: 320,
+    quantity: 5,
+    pickupWindow: 'Today, 4:30–5:30 PM',
+    area: 'Khar West',
+    distance: '1.5 km',
+    photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.067,
+    longitude: 72.832,
+    description: 'Slow-steeped 16-hour single-origin cold brew paired with an artisanal glazed cinnamon bun.',
+  },
+  {
+    id: 'mlc-avocado-toast',
+    name: 'Smoked Paneer Bagel & Berry Tart',
+    vendor: 'Mango Leaf Cafe',
+    category: 'Cafe',
+    price: 139,
+    originalPrice: 360,
     quantity: 2,
-    pickupWindow: 'Today, 6:00–7:00 PM',
-    area: 'Pali Hill',
-    distance: '1.2 km',
-    photo: 'bakery',
-    latitude: 19.062,
-    longitude: 72.825,
-    description: 'Four assorted pastries from the counter, packed up fresh just before closing.',
+    pickupWindow: 'Today, 5:00–6:00 PM',
+    area: 'Khar West',
+    distance: '1.5 km',
+    photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.067,
+    longitude: 72.832,
+    description: 'Toasted multigrain bagel filled with grilled spiced paneer, microgreens and house mint chutney.',
   },
+
+  // Restaurant 3: Dabba & Co. (3 dishes)
   {
-    id: 'seed-supper',
+    id: 'dc-veg-tiffin',
     name: 'Tonight’s veg tiffin',
     vendor: 'Dabba & Co.',
     category: 'Meals',
@@ -295,11 +432,195 @@ const DEFAULT_LISTINGS: FoodListing[] = [
     area: 'Bandra West',
     distance: '1.8 km',
     photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=600&q=80',
     latitude: 19.053,
     longitude: 72.836,
-    description: 'A hearty home-style tiffin with seasonal sabzi, rice and fresh rotis.',
+    description: 'A hearty home-style tiffin with paneer butter masala, yellow dal tadka, jeera rice and 3 hot phulkas.',
+  },
+  {
+    id: 'dc-biryani-box',
+    name: 'Dum Hyderabadi Veg Biryani Box',
+    vendor: 'Dabba & Co.',
+    category: 'Meals',
+    price: 199,
+    originalPrice: 499,
+    quantity: 3,
+    pickupWindow: 'Today, 7:00–8:00 PM',
+    area: 'Bandra West',
+    distance: '1.8 km',
+    photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.053,
+    longitude: 72.836,
+    description: 'Fragrant basmati rice layered with marinated vegetables, saffron, crispy fried onions and cool mint raita.',
+  },
+  {
+    id: 'dc-rajma-chawal',
+    name: 'Amritsari Chole Kulche Box',
+    vendor: 'Dabba & Co.',
+    category: 'Meals',
+    price: 149,
+    originalPrice: 360,
+    quantity: 4,
+    pickupWindow: 'Today, 7:30–8:30 PM',
+    area: 'Bandra West',
+    distance: '1.8 km',
+    photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.053,
+    longitude: 72.836,
+    description: 'Slow-cooked spiced chickpeas served with two fluffy stuffed kulchas, pickled onions and tangy chutney.',
+  },
+
+  // Restaurant 4: Veronica's Bandra (Cult Ranwar Village cafe & deli from official menu)
+  {
+    id: 'veronicas-avo-snob',
+    name: 'The Avo Snob (Burrata & Basil Pesto Ciabatta)',
+    vendor: "Veronica's Bandra",
+    category: 'Cafe',
+    price: 240,
+    originalPrice: 650,
+    quantity: 3,
+    pickupWindow: 'Today, 5:30–7:00 PM',
+    area: 'Bandra West',
+    distance: '0.4 km',
+    photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.0544,
+    longitude: 72.8277,
+    description: 'Marinated heirloom tomatoes, fragrant house basil pesto, fresh burrata on crusty artisan ciabatta.',
+  },
+  {
+    id: 'veronicas-chilli-cheese-melt',
+    name: 'Mumbai Chilli Cheese Melt',
+    vendor: "Veronica's Bandra",
+    category: 'Cafe',
+    price: 159,
+    originalPrice: 425,
+    quantity: 4,
+    pickupWindow: 'Today, 5:30–7:00 PM',
+    area: 'Bandra West',
+    distance: '0.4 km',
+    photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.0544,
+    longitude: 72.8277,
+    description: 'Sharp cheddar, pickled jalapeños, and spiced naga hot honey pressed on golden toasted milk loaf.',
+  },
+  {
+    id: 'veronicas-pass-the-pastrami',
+    name: 'Pass The Pastrami Deli Sandwich',
+    vendor: "Veronica's Bandra",
+    category: 'Cafe',
+    price: 290,
+    originalPrice: 775,
+    quantity: 2,
+    pickupWindow: 'Today, 6:00–7:00 PM',
+    area: 'Bandra West',
+    distance: '0.4 km',
+    photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.0544,
+    longitude: 72.8277,
+    description: 'House-cured spiced pastrami, stone-ground wholegrain mustard, and dill pickles on hearty milk loaf.',
+  },
+  {
+    id: 'veronicas-truffle-mushroom-puff',
+    name: 'Truffle Mushroom Puff',
+    vendor: "Veronica's Bandra",
+    category: 'Bakery',
+    price: 89,
+    originalPrice: 220,
+    quantity: 5,
+    pickupWindow: 'Today, 5:00–6:30 PM',
+    area: 'Bandra West',
+    distance: '0.4 km',
+    photo: 'bakery',
+    imageUri: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.0544,
+    longitude: 72.8277,
+    description: 'Golden flaky all-butter French puff pastry stuffed with roasted wild mushrooms and white truffle cream.',
+  },
+  {
+    id: 'veronicas-kouign-amann',
+    name: 'Orange Custard Kouign-Amann',
+    vendor: "Veronica's Bandra",
+    category: 'Bakery',
+    price: 119,
+    originalPrice: 325,
+    quantity: 3,
+    pickupWindow: 'Today, 5:00–6:30 PM',
+    area: 'Bandra West',
+    distance: '0.4 km',
+    photo: 'bakery',
+    imageUri: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.0544,
+    longitude: 72.8277,
+    description: 'Caramelized Brittany layered pastry filled with silky orange zest custard and candied citrus peel.',
+  },
+  {
+    id: 'veronicas-burra-burra-bowl',
+    name: 'Burra Burra Salad Bowl',
+    vendor: "Veronica's Bandra",
+    category: 'Meals',
+    price: 210,
+    originalPrice: 650,
+    quantity: 2,
+    pickupWindow: 'Today, 5:30–7:00 PM',
+    area: 'Bandra West',
+    distance: '0.4 km',
+    photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.0544,
+    longitude: 72.8277,
+    description: 'Crispy house greens, creamy burrata ball, heirloom tomatoes, crunchy puffed quinoa, and basil vinaigrette.',
+  },
+  {
+    id: 'veronicas-ferrero-pac',
+    name: 'Messy Ferrero Rocher PAC',
+    vendor: "Veronica's Bandra",
+    category: 'Bakery',
+    price: 125,
+    originalPrice: 325,
+    quantity: 3,
+    pickupWindow: 'Today, 5:00–6:30 PM',
+    area: 'Bandra West',
+    distance: '0.4 km',
+    photo: 'bakery',
+    imageUri: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.0544,
+    longitude: 72.8277,
+    description: 'Pain au chocolat overloaded with dark chocolate ganache, roasted hazelnut praline, and Ferrero Rocher.',
   },
 ];
+
+export const VENDOR_METADATA: Record<string, { coverImage: string; rating: number; ratingCount: number }> = {
+  "Veronica's Bandra": {
+    coverImage: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=600&q=80',
+    rating: 4.9,
+    ratingCount: 420,
+  },
+  "Veronica's": {
+    coverImage: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=600&q=80',
+    rating: 4.9,
+    ratingCount: 420,
+  },
+  'Bandra Bread Room': {
+    coverImage: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80',
+    rating: 4.8,
+    ratingCount: 230,
+  },
+  'Mango Leaf Cafe': {
+    coverImage: 'https://images.unsplash.com/photo-1559925393-8be0ec4767c8?auto=format&fit=crop&w=600&q=80',
+    rating: 4.7,
+    ratingCount: 185,
+  },
+  'Dabba & Co.': {
+    coverImage: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=600&q=80',
+    rating: 4.9,
+    ratingCount: 310,
+  },
+};
 
 const MarketplaceContext = createContext<MarketplaceValue | null>(null);
 
@@ -308,6 +629,7 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
   const [orders, setOrders] = useState<PickupOrder[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [mode, setMode] = useState<AppMode>('shopper');
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(DEMO_SHOPPER);
   const [isReady, setIsReady] = useState(false);
   const [storageError, setStorageError] = useState(false);
 
@@ -315,11 +637,13 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
   const ordersRef = useRef<PickupOrder[]>([]);
   const favoritesRef = useRef<string[]>([]);
   const modeRef = useRef<AppMode>('shopper');
+  const userRef = useRef<UserProfile | null>(DEMO_SHOPPER);
 
   listingsRef.current = listings;
   ordersRef.current = orders;
   favoritesRef.current = favorites;
   modeRef.current = mode;
+  userRef.current = currentUser;
 
   useEffect(() => {
     let alive = true;
@@ -328,7 +652,10 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
         if (!alive) return;
         if (raw) {
           const saved = JSON.parse(raw) as Partial<PersistedState>;
-          const storedListings = saved.listings ?? DEFAULT_LISTINGS;
+          const rawStored = saved.listings ?? DEFAULT_LISTINGS;
+          const existingIds = new Set(rawStored.map((i) => i.id));
+          const missingDefaults = DEFAULT_LISTINGS.filter((d) => !existingIds.has(d.id));
+          const storedListings = [...rawStored, ...missingDefaults];
           const localizedListings = storedListings.map((item) => {
             const sample = DEFAULT_LISTINGS.find((defaultItem) => defaultItem.id === item.id);
             if (sample) return { ...item, ...sample, quantity: item.quantity };
@@ -350,6 +677,7 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
             }
             return item;
           });
+
           const localizedOrders = (saved.orders ?? []).map((order) => {
             const sample = DEFAULT_LISTINGS.find((item) => item.id === order.listingId);
             return {
@@ -357,18 +685,18 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
               area: sample?.area ?? (OLD_DEMO_AREAS.has(order.area) ? 'Bandra West' : order.area),
             };
           });
-          console.log('[MarketplaceContext] loaded from storage, listings count:', localizedListings.length);
+
           listingsRef.current = localizedListings;
           ordersRef.current = localizedOrders;
           favoritesRef.current = saved.favorites ?? [];
           modeRef.current = saved.mode ?? 'shopper';
+          userRef.current = saved.currentUser !== undefined ? saved.currentUser : DEMO_SHOPPER;
 
           setListings(localizedListings);
           setOrders(localizedOrders);
           setFavorites(saved.favorites ?? []);
           setMode(saved.mode ?? 'shopper');
-        } else {
-          console.log('[MarketplaceContext] storage was empty, using defaults');
+          setCurrentUser(userRef.current);
         }
       })
       .catch((err) => {
@@ -383,43 +711,67 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-  const save = useCallback(
-    (next: Partial<PersistedState>) => {
-      const nextListings = next.listings ?? listingsRef.current;
-      const nextOrders = next.orders ?? ordersRef.current;
-      const nextFavorites = next.favorites ?? favoritesRef.current;
-      const nextMode = next.mode ?? modeRef.current;
+  const save = useCallback((next: Partial<PersistedState>) => {
+    const nextListings = next.listings ?? listingsRef.current;
+    const nextOrders = next.orders ?? ordersRef.current;
+    const nextFavorites = next.favorites ?? favoritesRef.current;
+    const nextMode = next.mode ?? modeRef.current;
+    const nextUser = next.currentUser !== undefined ? next.currentUser : userRef.current;
 
-      console.log('[MarketplaceContext] saving state, listings count:', nextListings.length, 'mode:', nextMode);
+    listingsRef.current = nextListings;
+    ordersRef.current = nextOrders;
+    favoritesRef.current = nextFavorites;
+    modeRef.current = nextMode;
+    userRef.current = nextUser;
 
-      listingsRef.current = nextListings;
-      ordersRef.current = nextOrders;
-      favoritesRef.current = nextFavorites;
-      modeRef.current = nextMode;
+    setListings(nextListings);
+    setOrders(nextOrders);
+    setFavorites(nextFavorites);
+    setMode(nextMode);
+    setCurrentUser(nextUser);
 
-      setListings(nextListings);
-      setOrders(nextOrders);
-      setFavorites(nextFavorites);
-      setMode(nextMode);
+    const payload: PersistedState = {
+      listings: nextListings,
+      orders: nextOrders,
+      favorites: nextFavorites,
+      mode: nextMode,
+      currentUser: nextUser,
+    };
 
-      const payload: PersistedState = {
-        listings: nextListings,
-        orders: nextOrders,
-        favorites: nextFavorites,
-        mode: nextMode,
-      };
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload)).catch((err) => {
+      console.error('[MarketplaceContext] failed saving to AsyncStorage:', err);
+      setStorageError(true);
+    });
+  }, []);
 
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-        .then(() => {
-          console.log('[MarketplaceContext] saved successfully to AsyncStorage, count:', nextListings.length);
-        })
-        .catch((err) => {
-          console.error('[MarketplaceContext] failed saving to AsyncStorage:', err);
-          setStorageError(true);
-        });
-    },
-    [],
-  );
+  // Compute restaurants by grouping listings under each vendor
+  const restaurants = useMemo<RestaurantGroup[]>(() => {
+    const map: Record<string, RestaurantGroup> = {};
+
+    for (const item of listings) {
+      const vName = item.vendor || 'Local Kitchen';
+      if (!map[vName]) {
+        const meta = VENDOR_METADATA[vName];
+        map[vName] = {
+          id: `rest-${vName.toLowerCase().replace(/[^\w]/g, '-')}`,
+          name: vName,
+          category: item.category,
+          area: item.area,
+          distance: item.distance || '0.4 km',
+          latitude: item.latitude,
+          longitude: item.longitude,
+          rating: meta?.rating ?? 4.8,
+          ratingCount: meta?.ratingCount ?? 84,
+          coverImage: meta?.coverImage ?? item.imageUri,
+          dishes: [],
+          pickupWindow: item.pickupWindow,
+        };
+      }
+      map[vName].dishes.push(item);
+    }
+
+    return Object.values(map);
+  }, [listings]);
 
   const value = useMemo<MarketplaceValue>(
     () => ({
@@ -427,8 +779,35 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
       orders,
       favorites,
       mode,
+      currentUser,
+      restaurants,
       isReady,
       storageError,
+      login: (profile: UserProfile) => {
+        save({
+          currentUser: profile,
+          mode: profile.role,
+        });
+      },
+      logout: () => {
+        save({
+          currentUser: null,
+          mode: 'shopper',
+        });
+      },
+      register: (profileData: Omit<UserProfile, 'id'>) => {
+        const newProfile: UserProfile = {
+          ...profileData,
+          id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          savedMoneyInr: 0,
+          mealsRescued: 0,
+        };
+        save({
+          currentUser: newProfile,
+          mode: newProfile.role,
+        });
+        return newProfile;
+      },
       setMode: (nextMode) => save({ mode: nextMode }),
       toggleFavorite: (id) => {
         const cur = favoritesRef.current;
@@ -495,15 +874,20 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
         const coords = hasManualCoords
           ? { latitude: listing.latitude!, longitude: listing.longitude! }
           : getCoordinatesForArea(listing.area, Date.now());
+
+        const effectiveVendor = currentUser?.role === 'vendor' && currentUser.restaurantName
+          ? currentUser.restaurantName
+          : listing.vendor;
+
         const nextListing: FoodListing = {
           ...listing,
+          vendor: effectiveVendor,
           id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           latitude: coords.latitude,
           longitude: coords.longitude,
           distance: 'Nearby',
           isMine: true,
         };
-        console.log('[MarketplaceContext] addListing added:', nextListing.name, nextListing.id, 'total count:', listingsRef.current.length + 1);
         save({
           listings: [nextListing, ...listingsRef.current],
           mode: 'vendor',
@@ -518,18 +902,13 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
             category: listing.category,
             price_inr: listing.price,
             original_price_inr: listing.originalPrice,
-            quantity: listing.quantity,
-            pickup_window: listing.pickupWindow,
-            area: listing.area,
-            is_active: true,
-            expires_at: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
           })
           .then(() => {}, () => {});
 
         return nextListing.id;
       },
     }),
-    [favorites, isReady, listings, mode, orders, save, storageError],
+    [currentUser, favorites, isReady, listings, mode, orders, restaurants, save, storageError],
   );
 
   return (
@@ -539,10 +918,10 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
   );
 }
 
-export function useMarketplace() {
-  const value = useContext(MarketplaceContext);
-  if (!value) {
-    throw new Error('useMarketplace must be used inside MarketplaceProvider.');
+export function useMarketplace(): MarketplaceValue {
+  const context = useContext(MarketplaceContext);
+  if (!context) {
+    throw new Error('useMarketplace must be used within a MarketplaceProvider');
   }
-  return value;
+  return context;
 }

@@ -20,7 +20,27 @@ tags:
     description: Buyer-vendor pickup chat
   - name: notifications
     description: Expo push notification device registration
+  - name: search
+    description: Natural language search and filter parsing
 paths:
+  /search/parse:
+    post:
+      operationId: parseNaturalSearch
+      tags: [search]
+      summary: Convert natural language query into structured filters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchParseInput"
+      responses:
+        "200":
+          description: Parsed structured filters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchFilters"
   /healthz:
     get:
       operationId: healthCheck
@@ -529,4 +549,53 @@ components:
         token: { type: string, minLength: 10, maxLength: 500 }
         platform: { type: string, enum: [ios, android] }
       required: [token, platform]
+    SearchParseInput:
+      type: object
+      properties:
+        query:
+          type: string
+          maxLength: 200
+        now:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+      required:
+        - query
+        - now
+        - timezone
+    SearchFilters:
+      type: object
+      properties:
+        keywords:
+          type: array
+          items:
+            type: string
+          default: []
+        category:
+          type: string
+          enum: [bakery, cafe, meals]
+        diet:
+          type: array
+          items:
+            type: string
+            enum: [veg, vegan, egg_free, nut_free]
+          default: []
+        maxPrice:
+          type: number
+        area:
+          type: string
+        nearMe:
+          type: boolean
+          default: false
+        maxDistanceKm:
+          type: number
+        pickupAfter:
+          type: string
+          format: date-time
+        sortBy:
+          type: string
+          enum: [distance, price, ending_soon]
+          default: distance
+
 

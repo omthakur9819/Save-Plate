@@ -29,6 +29,7 @@ import {
 import { requireUser } from "../middlewares/requireUser";
 import { HttpError } from "../lib/http-error";
 import { sendPushToUsers } from "../lib/push";
+import { applyFilters } from "../lib/filter-query-builder";
 
 const router: IRouter = Router();
 
@@ -167,70 +168,31 @@ router.get("/listings", async (req, res) => {
         ? rawDietary.flatMap((value) => String(value).split(",")).filter(Boolean)
         : undefined;
   const filters = GetListingsQueryParams.parse({ ...req.query, dietary });
-  const rows = await db
-    .select({ listing: listingsTable, vendor: vendorsTable })
-    .from(listingsTable)
-    .innerJoin(vendorsTable, eq(vendorsTable.id, listingsTable.vendorId))
-    .where(
-      and(
-        eq(listingsTable.active, true),
-        gt(listingsTable.quantity, 0),
-        gt(listingsTable.expiresAt, new Date()),
-        eq(vendorsTable.city, "Mumbai"),
-      ),
-    );
 
-  const search = filters.q?.trim().toLocaleLowerCase();
   const origin =
     filters.latitude !== undefined && filters.longitude !== undefined
       ? { latitude: filters.latitude, longitude: filters.longitude }
       : null;
-  const listings = rows
-    .map(({ listing, vendor }) => {
-      const point = coords(listing.latitude, listing.longitude);
-      const distanceKm = point && origin ? haversineKm(origin, point) : null;
-      return { listing, vendor, result: mapListing(listing, vendor, distanceKm) };
-    })
-    .filter(({ listing, vendor, result }) => {
-      if (filters.category && listing.category !== filters.category) return false;
-      if (
-        filters.dietary?.length &&
-        !filters.dietary.some((tag) => listing.dietaryTags.includes(tag))
-      ) return false;
-      if (filters.maxPrice !== undefined && listing.price > filters.maxPrice) return false;
-      if (
-        filters.minDiscountPercent !== undefined &&
-        result.discountPercent < filters.minDiscountPercent
-      ) return false;
-      if (
-        filters.maxDistanceKm !== undefined &&
-        result.distanceKm !== null &&
-        result.distanceKm > filters.maxDistanceKm
-      ) return false;
-      if (
-        search &&
-        !`${listing.name} ${vendor.name} ${listing.area} ${listing.description}`
-          .toLocaleLowerCase()
-          .includes(search)
-      ) return false;
-      return true;
-    });
 
-  if (filters.sort === "discount") {
-    listings.sort((a, b) => b.result.discountPercent - a.result.discountPercent);
-  } else if (filters.sort === "distance" && origin) {
-    listings.sort(
-      (a, b) =>
-        (a.result.distanceKm ?? Number.MAX_SAFE_INTEGER) -
-        (b.result.distanceKm ?? Number.MAX_SAFE_INTEGER),
-    );
-  } else {
-    listings.sort(
-      (a, b) => a.listing.expiresAt.getTime() - b.listing.expiresAt.getTime(),
-    );
-  }
+  const results = await applyFilters(
+    {
+      q: filters.q,
+      category: (filters.category?.toLowerCase() as "bakery" | "cafe" | "meals") || undefined,
+      diet: (filters.dietary as any) || [],
+      maxPrice: filters.maxPrice,
+      minDiscountPercent: filters.minDiscountPercent,
+      maxDistanceKm: filters.maxDistanceKm,
+      sortBy:
+        filters.sort === "discount"
+          ? ("price" as const)
+          : filters.sort === "expiring"
+            ? ("ending_soon" as const)
+            : ("distance" as const),
+    },
+    origin,
+  );
 
-  res.json(listings.map(({ result }) => result));
+  res.json(results);
 });
 
 router.get("/vendor/listings", requireUser, async (_req, res) => {

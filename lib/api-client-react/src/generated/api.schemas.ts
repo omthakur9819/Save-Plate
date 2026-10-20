@@ -252,6 +252,53 @@ export interface PushDeviceInput {
   platform: PushDeviceInputPlatform;
 }
 
+export interface SearchParseInput {
+  /** @maxLength 200 */
+  query: string;
+  now: string;
+  timezone: string;
+}
+
+export type SearchFiltersCategory = typeof SearchFiltersCategory[keyof typeof SearchFiltersCategory];
+
+
+export const SearchFiltersCategory = {
+  bakery: 'bakery',
+  cafe: 'cafe',
+  meals: 'meals',
+} as const;
+
+export type SearchFiltersDietItem = typeof SearchFiltersDietItem[keyof typeof SearchFiltersDietItem];
+
+
+export const SearchFiltersDietItem = {
+  veg: 'veg',
+  vegan: 'vegan',
+  egg_free: 'egg_free',
+  nut_free: 'nut_free',
+} as const;
+
+export type SearchFiltersSortBy = typeof SearchFiltersSortBy[keyof typeof SearchFiltersSortBy];
+
+
+export const SearchFiltersSortBy = {
+  distance: 'distance',
+  price: 'price',
+  ending_soon: 'ending_soon',
+} as const;
+
+export interface SearchFilters {
+  keywords?: string[];
+  category?: SearchFiltersCategory;
+  diet?: SearchFiltersDietItem[];
+  maxPrice?: number;
+  area?: string;
+  nearMe?: boolean;
+  maxDistanceKm?: number;
+  pickupAfter?: string;
+  sortBy?: SearchFiltersSortBy;
+}
+
 export type GetListingsParams = {
 q?: string;
 category?: string;

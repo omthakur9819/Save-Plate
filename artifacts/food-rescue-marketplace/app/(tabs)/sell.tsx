@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   DimensionValue,
@@ -103,16 +103,34 @@ const MAP_LANDMARKS = [
 export default function VendorScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { listings, mode, setMode, addListing } = useMarketplace();
+  const { listings, mode, setMode, addListing, currentUser } = useMarketplace();
 
   const [name, setName] = useState('');
-  const [vendor, setVendor] = useState('');
+  const [vendor, setVendor] = useState(
+    currentUser?.role === 'vendor' ? (currentUser.restaurantName || currentUser.name) : '',
+  );
   const [category, setCategory] = useState<FoodCategory>('Bakery');
-  const [area, setArea] = useState('Bandra West');
+  const [area, setArea] = useState(currentUser?.area || 'Bandra West');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number }>(() =>
-    getCoordinatesForArea('Bandra West'),
+    getCoordinatesForArea(currentUser?.area || 'Bandra West'),
   );
+
+  useEffect(() => {
+    if (currentUser?.role === 'vendor') {
+      if (currentUser.restaurantName) {
+        setVendor(currentUser.restaurantName);
+      }
+      if (currentUser.area) {
+        setArea(currentUser.area);
+        const coords = getCoordinatesForArea(currentUser.area);
+        setCoordinates(coords);
+        setPickerCoords(coords);
+        setPickerCenter(coords);
+        setPickerAreaName(currentUser.area);
+      }
+    }
+  }, [currentUser]);
   const [price, setPrice] = useState('');
   const [originalPrice, setOriginalPrice] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -443,6 +461,56 @@ export default function VendorScreen() {
             <Feather name="arrow-right" size={18} color={colors.background} />
           </Pressable>
         ) : null}
+
+        {/* Vendor Profile Status Card */}
+        {currentUser?.role === 'vendor' ? (
+          <View style={[styles.vendorAccountCard, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={[styles.vendorAvatarCircle, { backgroundColor: colors.card }]}>
+                <Feather name="coffee" size={16} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.vendorAccountName, { color: colors.foreground }]} numberOfLines={1}>
+                    {currentUser.restaurantName || currentUser.name}
+                  </Text>
+                  <View style={[styles.verifiedPill, { backgroundColor: '#DCFCE7' }]}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#15803D' }}>VENDOR</Text>
+                  </View>
+                </View>
+                <Text style={[styles.vendorAccountMeta, { color: colors.mutedForeground }]}>
+                  {currentUser.area || 'Mumbai'} · Surplus dishes add to this restaurant
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => router.push('/login')}
+              style={[styles.switchAccountBtn, { borderColor: colors.border }]}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.switchAccountBtnText, { color: colors.primary }]}>Switch</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            onPress={() => router.push('/login')}
+            style={[styles.vendorPromptBanner, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}
+            accessibilityRole="button"
+          >
+            <Feather name="info" size={16} color="#D97706" style={{ marginTop: 2 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#92400E' }}>
+                Selling for a restaurant or bakery?
+              </Text>
+              <Text style={{ fontSize: 11, color: '#B45309', marginTop: 2, lineHeight: 16 }}>
+                Sign in as a Vendor so all your dishes are grouped under your restaurant menu.
+              </Text>
+            </View>
+            <View style={{ backgroundColor: '#F59E0B', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}>
+              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 11 }}>Sign In</Text>
+            </View>
+          </Pressable>
+        )}
 
         {lastPublishedId ? (
           <View style={styles.successBanner}>
@@ -1327,6 +1395,54 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 8,
     marginRight: 4,
+  },
+  vendorAccountCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  vendorAvatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vendorAccountName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  verifiedPill: {
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  vendorAccountMeta: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  switchAccountBtn: {
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  switchAccountBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  vendorPromptBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
   },
 });
 
