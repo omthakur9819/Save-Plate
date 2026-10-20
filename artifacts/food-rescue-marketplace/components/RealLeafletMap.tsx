@@ -12,19 +12,27 @@ export default function RealLeafletMap({
   selectedId,
   onSelectMarker,
   onLocateMe,
+  routeDestination,
+  routeEstimate,
+  isRoutingLoading,
+  travelMode = 'driving',
+  onChangeTravelMode,
+  onStartRoute,
+  onClearRoute,
 }: NearbyMapProps) {
   const webViewRef = useRef<WebView>(null);
   const [hasError, setHasError] = useState(false);
 
   // Initial center coordinates (Default to Mumbai Bandra/BKC or provided center)
   const initialCenter = useMemo(() => {
+    if (routeDestination) return { latitude: routeDestination.latitude, longitude: routeDestination.longitude };
     if (center) return center;
     if (userLocation) return userLocation;
     if (items.length > 0 && items[0].latitude && items[0].longitude) {
       return { latitude: items[0].latitude, longitude: items[0].longitude };
     }
     return { latitude: 19.0595, longitude: 72.8315 };
-  }, []);
+  }, [routeDestination]);
 
   // HTML content injected into the WebView
   const htmlContent = useMemo(() => {
@@ -42,6 +50,8 @@ export default function RealLeafletMap({
     );
 
     const initialUserLoc = userLocation ? JSON.stringify(userLocation) : 'null';
+    const initialRoutePts = routeEstimate?.points ? JSON.stringify(routeEstimate.points) : 'null';
+
 
     return `
 <!DOCTYPE html>
@@ -303,14 +313,28 @@ export default function RealLeafletMap({
       map.flyTo([lat, lng], zoomLevel || 15, { animate: true, duration: 0.8 });
     };
 
-    window.selectMarker = function(id) {
-      selectedId = id;
-      renderMarkers();
-      if (markersMap[id]) {
-        var ll = markersMap[id].getLatLng();
-        map.flyTo([ll.lat, ll.lng], 15, { animate: true, duration: 0.6 });
+    var routePolyline = null;
+    window.updateRoute = function(pts) {
+      if (routePolyline) {
+        map.removeLayer(routePolyline);
+        routePolyline = null;
       }
+      if (!pts || !Array.isArray(pts) || pts.length < 2) return;
+      var latlngs = pts.map(function(p) { return [p.latitude, p.longitude]; });
+      routePolyline = L.polyline(latlngs, {
+        color: '#2563eb',
+        weight: 5,
+        opacity: 0.85,
+        lineJoin: 'round'
+      }).addTo(map);
+      try {
+        map.fitBounds(routePolyline.getBounds(), { padding: [50, 50], maxZoom: 16 });
+      } catch (e) {}
     };
+
+    if (${initialRoutePts}) {
+      window.updateRoute(${initialRoutePts});
+    }
   </script>
 </body>
 </html>
@@ -359,6 +383,17 @@ export default function RealLeafletMap({
       );
     }
   }, [selectedId]);
+
+  // Sync route changes
+  useEffect(() => {
+    if (webViewRef.current) {
+      const ptsJson = routeEstimate?.points ? JSON.stringify(routeEstimate.points) : 'null';
+      webViewRef.current.injectJavaScript(
+        `if (window.updateRoute) { window.updateRoute(${ptsJson}); } true;`,
+      );
+    }
+  }, [routeEstimate?.points]);
+
 
   if (hasError) {
     return (

@@ -19,8 +19,15 @@ export default function VectorMap({
   onMarkerPress,
   selectedId,
   onSelectMarker,
+  routeDestination,
+  routeEstimate,
+  isRoutingLoading,
+  travelMode = 'driving',
+  onChangeTravelMode,
+  onClearRoute,
 }: NearbyMapProps) {
   const colors = useColors();
+
 
   const markerPositions = useMemo(() => {
     if (items.length === 0) return [];
@@ -85,20 +92,167 @@ export default function VectorMap({
     return items[0]?.area || 'Mumbai';
   }, [items, selectedId]);
 
+  // Find coordinate of destination if routing
+  const routeDestPos = useMemo(() => {
+    if (!routeDestination) return null;
+    const idx = items.findIndex((i) => i.id === routeDestination.id);
+    if (idx !== -1 && markerPositions[idx]) {
+      const leftP = parseFloat(markerPositions[idx].left);
+      const topP = parseFloat(markerPositions[idx].top);
+      return { x: (leftP / 100) * 360, y: (topP / 100) * 280 };
+    }
+    return { x: 280, y: 100 };
+  }, [routeDestination, items, markerPositions]);
+
   return (
-    <View style={[styles.map, { backgroundColor: '#e8eddf' }]}>
-      <Svg width="100%" height="100%" viewBox="0 0 360 280" preserveAspectRatio="xMidYMid slice">
-        <Rect width="360" height="280" fill="#e8eddf" />
-        <Path d="M-20 54 C58 66 88 25 166 46 S276 75 390 24" fill="none" stroke="#f8f6ee" strokeWidth="20" />
-        <Path d="M-30 144 C50 125 95 163 170 139 S278 111 390 149" fill="none" stroke="#f8f6ee" strokeWidth="16" />
-        <Path d="M-22 239 C53 218 106 250 177 226 S292 206 382 230" fill="none" stroke="#f8f6ee" strokeWidth="18" />
-        <Path d="M70 -22 C85 44 46 79 80 141 S97 215 77 302" fill="none" stroke="#faf8f2" strokeWidth="13" />
-        <Path d="M183 -22 C153 38 208 86 178 140 S155 223 190 300" fill="none" stroke="#faf8f2" strokeWidth="13" />
-        <Path d="M309 -20 C281 37 330 92 294 151 S286 221 321 303" fill="none" stroke="#faf8f2" strokeWidth="13" />
-        <Path d="M-8 96 L368 198 M-5 187 L359 83" fill="none" stroke="#d4decb" strokeWidth="1.5" />
-        <Circle cx="180" cy="141" r="11" fill="#457b5c" opacity="0.18" />
-        <Circle cx="180" cy="141" r="5" fill="#457b5c" />
-      </Svg>
+    <View style={styles.containerWrapper}>
+      {/* Route Header Card */}
+      {routeDestination && (
+        <View style={styles.routeHeaderCard}>
+          <View style={styles.routeHeaderTop}>
+            <View style={styles.routeDestRow}>
+              <View style={styles.routeDestBadge}>
+                <Feather name="navigation" size={14} color="#ffffff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.routeDestTitle} numberOfLines={1}>
+                  Route to {routeDestination.vendor}
+                </Text>
+                <Text style={styles.routeDestSub} numberOfLines={1}>
+                  {routeDestination.area} · {routeDestination.name}
+                </Text>
+              </View>
+            </View>
+
+            {onClearRoute && (
+              <Pressable
+                onPress={onClearRoute}
+                hitSlop={8}
+                style={styles.closeRouteBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close route view"
+              >
+                <Feather name="x" size={16} color="#64748b" />
+              </Pressable>
+            )}
+          </View>
+
+          {/* Live ETA, Distance & Arrival Time */}
+          {routeEstimate && (
+            <View style={styles.routeMetricsRow}>
+              <View style={styles.etaContainer}>
+                <Text style={styles.etaValue}>{routeEstimate.etaText}</Text>
+                <Text style={styles.etaDistance}>({routeEstimate.distanceText})</Text>
+              </View>
+
+              <View style={styles.arrivalContainer}>
+                <View style={styles.greenDot} />
+                <Text style={styles.arrivalText}>Arrive by {routeEstimate.arrivalTime}</Text>
+              </View>
+
+              <View style={styles.aStarBadge}>
+                <Text style={styles.aStarBadgeText}>
+                  {routeEstimate.method === 'a-star' ? 'A* ROUTE' : 'FASTEST'}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Travel Mode Selector */}
+          <View style={styles.modeSelector}>
+            <Pressable
+              onPress={() => onChangeTravelMode?.('driving')}
+              style={[
+                styles.modeBtn,
+                travelMode === 'driving' && styles.modeBtnActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Driving route"
+            >
+              <Text style={styles.modeEmoji}>🚗</Text>
+              <Text
+                style={[
+                  styles.modeBtnText,
+                  travelMode === 'driving' && styles.modeBtnTextActive,
+                ]}
+              >
+                Drive
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => onChangeTravelMode?.('two_wheeler')}
+              style={[
+                styles.modeBtn,
+                travelMode === 'two_wheeler' && styles.modeBtnActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Bike route"
+            >
+              <Text style={styles.modeEmoji}>🛵</Text>
+              <Text
+                style={[
+                  styles.modeBtnText,
+                  travelMode === 'two_wheeler' && styles.modeBtnTextActive,
+                ]}
+              >
+                Bike
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => onChangeTravelMode?.('walking')}
+              style={[
+                styles.modeBtn,
+                travelMode === 'walking' && styles.modeBtnActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Walking route"
+            >
+              <Text style={styles.modeEmoji}>🚶</Text>
+              <Text
+                style={[
+                  styles.modeBtnText,
+                  travelMode === 'walking' && styles.modeBtnTextActive,
+                ]}
+              >
+                Walk
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      <View style={[styles.map, { backgroundColor: '#e8eddf' }]}>
+        <Svg width="100%" height="100%" viewBox="0 0 360 280" preserveAspectRatio="xMidYMid slice">
+          <Rect width="360" height="280" fill="#e8eddf" />
+          <Path d="M-20 54 C58 66 88 25 166 46 S276 75 390 24" fill="none" stroke="#f8f6ee" strokeWidth="20" />
+          <Path d="M-30 144 C50 125 95 163 170 139 S278 111 390 149" fill="none" stroke="#f8f6ee" strokeWidth="16" />
+          <Path d="M-22 239 C53 218 106 250 177 226 S292 206 382 230" fill="none" stroke="#f8f6ee" strokeWidth="18" />
+          <Path d="M70 -22 C85 44 46 79 80 141 S97 215 77 302" fill="none" stroke="#faf8f2" strokeWidth="13" />
+          <Path d="M183 -22 C153 38 208 86 178 140 S155 223 190 300" fill="none" stroke="#faf8f2" strokeWidth="13" />
+          <Path d="M309 -20 C281 37 330 92 294 151 S286 221 321 303" fill="none" stroke="#faf8f2" strokeWidth="13" />
+          <Path d="M-8 96 L368 198 M-5 187 L359 83" fill="none" stroke="#d4decb" strokeWidth="1.5" />
+
+          {/* User Location Center Pin */}
+          <Circle cx="180" cy="141" r="14" fill="#2563eb" opacity="0.2" />
+          <Circle cx="180" cy="141" r="6" fill="#2563eb" stroke="#ffffff" strokeWidth="2" />
+
+          {/* Dynamic Route Line from User Location to Destination */}
+          {routeDestPos && (
+            <>
+              <Path
+                d={`M180 141 Q${(180 + routeDestPos.x) / 2 + 15} ${(141 + routeDestPos.y) / 2 - 20} ${routeDestPos.x} ${routeDestPos.y}`}
+                fill="none"
+                stroke="#2563eb"
+                strokeWidth="4"
+                strokeDasharray="6,4"
+              />
+              <Circle cx={routeDestPos.x} cy={routeDestPos.y} r="8" fill="#e2764d" stroke="#ffffff" strokeWidth="2" />
+            </>
+          )}
+        </Svg>
+
 
       {items.map((item, index) => {
         const point = markerPositions[index] || DEFAULT_POSITIONS[index % DEFAULT_POSITIONS.length];
@@ -188,11 +342,154 @@ export default function VectorMap({
         </Text>
       </View>
     </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  map: { height: 290, marginHorizontal: 16, borderRadius: 23, overflow: 'hidden' },
+  containerWrapper: {
+    marginHorizontal: 16,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  routeHeaderCard: {
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  routeHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  routeDestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  routeDestBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  routeDestTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  routeDestSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  closeRouteBtn: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: '#e2e8f0',
+  },
+  routeMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingVertical: 4,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  etaContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  etaValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#15803d',
+  },
+  etaDistance: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  arrivalContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  greenDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16a34a',
+  },
+  arrivalText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  aStarBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  aStarBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#1d4ed8',
+  },
+  modeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  modeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  modeBtnActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  modeEmoji: {
+    fontSize: 11,
+  },
+  modeBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  modeBtnTextActive: {
+    color: '#ffffff',
+  },
+  map: { height: 280, width: '100%', position: 'relative' },
   marker: { position: 'absolute', transform: [{ translateX: -16 }, { translateY: -16 }] },
   markerHalo: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   markerHaloSelected: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(226, 118, 77, 0.45)', transform: [{ translateX: -5 }, { translateY: -5 }] },
