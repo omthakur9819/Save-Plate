@@ -293,16 +293,33 @@ export default function ListingDetailScreen() {
               <Text style={[styles.pickupTime, { color: colors.foreground }]}>{listing.pickupWindow}</Text>
             </View>
           </View>
-          <View style={styles.placeLine}>
-            <View style={[styles.placeIcon, { backgroundColor: colors.secondary }]}>
-              <Feather name="map-pin" size={15} color={colors.secondaryForeground} />
+
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push({ pathname: '/(tabs)/map', params: { routeTo: listing.id } });
+            }}
+            style={({ pressed }) => [styles.placeLine, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`View estimated route and ETA to ${listing.vendor}`}
+          >
+            <View style={[styles.placeIcon, { backgroundColor: '#eff6ff' }]}>
+              <Feather name="navigation" size={16} color="#2563eb" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.placeName, { color: colors.foreground }]}>{listing.area}</Text>
-              <Text style={[styles.placeMeta, { color: colors.mutedForeground }]}>{listing.distance} away · Online & counter payment</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.placeName, { color: colors.foreground }]}>{listing.area}</Text>
+                <View style={styles.quickRouteBadge}>
+                  <Text style={styles.quickRouteBadgeText}>ESTIMATE ROUTE</Text>
+                </View>
+              </View>
+              <Text style={[styles.placeMeta, { color: colors.mutedForeground }]}>
+                {listing.distance} away · Tap for live GPS route & ETA
+              </Text>
             </View>
-            <Feather name="chevron-right" size={17} color={colors.mutedForeground} />
-          </View>
+            <Feather name="chevron-right" size={17} color="#2563eb" />
+          </Pressable>
+
 
           <View style={[styles.wasteNote, { borderColor: colors.border }]}>
             <Feather name="heart" size={15} color={colors.primary} />
@@ -508,6 +525,18 @@ const styles = StyleSheet.create({
   placeIcon: { width: 35, height: 35, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   placeName: { fontSize: 12, fontWeight: '700' },
   placeMeta: { fontSize: 10, marginTop: 4 },
+  quickRouteBadge: {
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  quickRouteBadgeText: {
+    color: '#1d4ed8',
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   wasteNote: { borderWidth: 1, borderRadius: 15, padding: 12, flexDirection: 'row', gap: 9, alignItems: 'center' },
   wasteText: { flex: 1, fontSize: 10, lineHeight: 15 },
   bottomBar: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopWidth: 1, paddingTop: 12, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 15, zIndex: 50 },
