@@ -634,7 +634,7 @@ export default function NearbyMapScreen() {
                     ]}
                   >
                     {routeDestination?.id === selectedListing.id && routeEstimate
-                      ? `${routeEstimate.etaText} (${routeEstimate.distanceText})`
+                      ? `${routeEstimate.etaText} (${routeEstimate.distanceText}) · ${routeEstimate.method === 'osrm-realtime' ? 'OSRM' : 'A*'}`
                       : 'Quick Route'}
                   </Text>
                 </Pressable>

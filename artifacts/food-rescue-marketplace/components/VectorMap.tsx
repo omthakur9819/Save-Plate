@@ -150,9 +150,25 @@ export default function VectorMap({
                 <Text style={styles.arrivalText}>Arrive by {routeEstimate.arrivalTime}</Text>
               </View>
 
-              <View style={styles.aStarBadge}>
-                <Text style={styles.aStarBadgeText}>
-                  {routeEstimate.method === 'a-star' ? 'A* ROUTE' : 'FASTEST'}
+              <View
+                style={[
+                  styles.aStarBadge,
+                  routeEstimate.method === 'osrm-realtime' ? styles.osrmBadge : styles.aStarBadgeFallback,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.methodDot,
+                    { backgroundColor: routeEstimate.method === 'osrm-realtime' ? '#16a34a' : '#d97706' },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.aStarBadgeText,
+                    { color: routeEstimate.method === 'osrm-realtime' ? '#15803d' : '#b45309' },
+                  ]}
+                >
+                  {routeEstimate.method === 'osrm-realtime' ? 'OSRM REAL ROADS' : 'A* ESTIMATE'}
                 </Text>
               </View>
             </View>
@@ -445,17 +461,31 @@ const styles = StyleSheet.create({
     color: '#334155',
   },
   aStarBadge: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+  },
+  osrmBadge: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+  },
+  aStarBadgeFallback: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+  },
+  methodDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
   aStarBadgeText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#1d4ed8',
+    letterSpacing: 0.3,
   },
   modeSelector: {
     flexDirection: 'row',

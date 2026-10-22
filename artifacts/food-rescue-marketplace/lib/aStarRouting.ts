@@ -24,6 +24,7 @@ export interface RouteEstimate {
   trafficStatus: 'normal' | 'light' | 'moderate';
   steps: RouteStep[];
   method: 'a-star' | 'osrm-realtime' | 'hybrid';
+  providerName?: string;
   summary?: string;
 }
 
@@ -242,8 +243,10 @@ export function computeAStarPath(
   for (let i = 0; i < path.length - 1; i++) {
     totalMeters += haversineDistanceMeters(path[i], path[i + 1]);
   }
-  // Realistic urban detour multiplier (approx 1.25x of waypoint straight segments)
-  const roadDistanceMeters = Math.max(directDistance * 1.2, totalMeters * 1.15);
+  // Pedestrians can take direct footpaths/cut-throughs; motor vehicles follow full road grids
+  const detourFactor = mode === 'walking' ? 1.08 : 1.2;
+  const pathFactor = mode === 'walking' ? 1.04 : 1.15;
+  const roadDistanceMeters = Math.max(directDistance * detourFactor, totalMeters * pathFactor);
 
   const speedKmh = AVERAGE_SPEED_KMH[mode];
   const durationSeconds = Math.round((roadDistanceMeters / 1000 / speedKmh) * 3600);
@@ -301,7 +304,7 @@ export async function getRouteEstimate(
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
+    const timer = setTimeout(() => controller.abort(), 5500);
 
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
@@ -314,12 +317,16 @@ export async function getRouteEstimate(
         const rawDistance = primaryRoute.distance || haversineDistanceMeters(start, goal) * 1.2;
         let rawDuration = primaryRoute.duration || 600;
 
-        // Tune duration for Indian city traffic if driving/two_wheeler
-        if (mode === 'driving') {
-          // Adjust for real city traffic factor
-          rawDuration = Math.round(rawDuration * 1.25);
+        // Accurately compute duration according to travel mode:
+        // OSRM public demo server returns vehicle-biased duration for 'foot', so we calibrate walking
+        if (mode === 'walking') {
+          // Average pedestrian walking pace: 4.8 km/h (1 km ~ 12.5 mins)
+          rawDuration = Math.max(60, Math.round((rawDistance / 1000 / AVERAGE_SPEED_KMH.walking) * 3600));
         } else if (mode === 'two_wheeler') {
-          rawDuration = Math.round((rawDistance / 1000 / AVERAGE_SPEED_KMH.two_wheeler) * 3600);
+          rawDuration = Math.max(60, Math.round((rawDistance / 1000 / AVERAGE_SPEED_KMH.two_wheeler) * 3600));
+        } else if (mode === 'driving') {
+          // Adjust for real city traffic factor
+          rawDuration = Math.max(60, Math.round(rawDuration * 1.25));
         }
 
         const points: LatLng[] = coordinates.map(([lng, lat]) => ({
@@ -331,11 +338,20 @@ export async function getRouteEstimate(
           points.push(start, goal);
         }
 
+        // Calibrate step durations proportionally to match the travel mode's realistic timing
+        const durationRatio =
+          primaryRoute.duration && primaryRoute.duration > 0
+            ? rawDuration / primaryRoute.duration
+            : 1;
+
         const steps: RouteStep[] =
           primaryRoute.legs?.[0]?.steps?.map((s: any) => ({
-            instruction: s.maneuver?.instruction || s.name || 'Continue on route',
+            instruction:
+              s.maneuver?.instruction ||
+              s.name ||
+              (mode === 'walking' ? 'Walk along designated path' : 'Continue on route'),
             distanceMeters: Math.round(s.distance || 0),
-            durationSeconds: Math.round(s.duration || 0),
+            durationSeconds: Math.round((s.duration || 0) * (mode === 'walking' || mode === 'two_wheeler' ? durationRatio : 1)),
           })) || [];
 
         return {
@@ -348,10 +364,11 @@ export async function getRouteEstimate(
           etaText: formatDuration(rawDuration),
           arrivalTime: formatArrivalTime(rawDuration),
           mode,
-          trafficStatus: rawDuration > 900 ? 'moderate' : 'light',
+          trafficStatus: mode === 'walking' ? 'normal' : rawDuration > 900 ? 'moderate' : 'light',
           steps,
           method: 'osrm-realtime',
-          summary: 'Fastest route via real-time road network',
+          providerName: 'OSRM (OpenStreetMap Roads)',
+          summary: mode === 'walking' ? 'Pedestrian walking route via OpenStreetMap' : 'Fastest route via real-time road network',
         };
       }
     }
@@ -380,6 +397,7 @@ export async function getRouteEstimate(
       },
     ],
     method: 'a-star',
+    providerName: 'A* Algorithm (Offline Fallback)',
     summary: 'A* Optimized shortest path estimate',
   };
 }

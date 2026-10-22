@@ -65,14 +65,16 @@ export default function GoogleMapsWebView({
       const sLng = userLocation.longitude;
       const dLat = routeDestination.latitude;
       const dLng = routeDestination.longitude;
-      return `https://maps.google.com/maps?saddr=${sLat},${sLng}&daddr=${dLat},${dLng}&hl=en&output=embed`;
+      // dirflg: 'w' for walking (pedestrian footpaths/sidewalks), 'b' for bike, 'd' for driving
+      const dirflg = travelMode === 'walking' ? 'w' : travelMode === 'two_wheeler' ? 'b' : 'd';
+      return `https://maps.google.com/maps?saddr=${sLat},${sLng}&daddr=${dLat},${dLng}&dirflg=${dirflg}&hl=en&output=embed`;
     }
 
     const lat = activeCoord.latitude;
     const lng = activeCoord.longitude;
     const z = activeCoord.zoom;
     return `https://maps.google.com/maps?q=${lat},${lng}&hl=en&z=${z}&output=embed`;
-  }, [routeDestination, userLocation, activeCoord]);
+  }, [routeDestination, userLocation, activeCoord, travelMode]);
 
   // HTML content rendering the Google Maps iframe
   const htmlContent = useMemo(() => {
@@ -136,7 +138,7 @@ export default function GoogleMapsWebView({
   const openInGoogleMapsApp = () => {
     if (routeDestination && userLocation) {
       const gMode =
-        travelMode === 'walking' ? 'walking' : travelMode === 'two_wheeler' ? 'two_wheeler' : 'driving';
+        travelMode === 'walking' ? 'walking' : travelMode === 'two_wheeler' ? 'two-wheeler' : 'driving';
       const url = `https://www.google.com/maps/dir/?api=1&origin=${userLocation.latitude},${userLocation.longitude}&destination=${routeDestination.latitude},${routeDestination.longitude}&travelmode=${gMode}`;
       Linking.openURL(url).catch(() => {});
       return;
@@ -184,7 +186,7 @@ export default function GoogleMapsWebView({
           {isRoutingLoading ? (
             <View style={styles.routeLoadingRow}>
               <ActivityIndicator size="small" color="#2563eb" />
-              <Text style={styles.routeLoadingText}>Computing fastest route with A* algorithm...</Text>
+              <Text style={styles.routeLoadingText}>Calculating road route (OSRM)...</Text>
             </View>
           ) : routeEstimate ? (
             <View style={styles.routeMetricsRow}>
@@ -198,9 +200,25 @@ export default function GoogleMapsWebView({
                 <Text style={styles.arrivalText}>Arrive by {routeEstimate.arrivalTime}</Text>
               </View>
 
-              <View style={styles.aStarBadge}>
-                <Text style={styles.aStarBadgeText}>
-                  {routeEstimate.method === 'a-star' ? 'A* OPTIMIZED' : 'FASTEST ROUTE'}
+              <View
+                style={[
+                  styles.aStarBadge,
+                  routeEstimate.method === 'osrm-realtime' ? styles.osrmBadge : styles.aStarBadgeFallback,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.methodDot,
+                    { backgroundColor: routeEstimate.method === 'osrm-realtime' ? '#16a34a' : '#d97706' },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.aStarBadgeText,
+                    { color: routeEstimate.method === 'osrm-realtime' ? '#15803d' : '#b45309' },
+                  ]}
+                >
+                  {routeEstimate.method === 'osrm-realtime' ? 'OSRM REAL ROADS' : 'A* ESTIMATE'}
                 </Text>
               </View>
             </View>
@@ -549,17 +567,31 @@ const styles = StyleSheet.create({
     color: '#334155',
   },
   aStarBadge: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+  },
+  osrmBadge: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+  },
+  aStarBadgeFallback: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+  },
+  methodDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
   aStarBadgeText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#1d4ed8',
+    letterSpacing: 0.3,
   },
   modeSelector: {
     flexDirection: 'row',
