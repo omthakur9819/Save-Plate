@@ -148,21 +148,56 @@ export default function ExploreScreen() {
           }
 
           // Diet tags
+          // SAFETY CRITICAL RULE: Unconfirmed listings must NEVER match dietary filters!
           if (filters.diet && filters.diet.length > 0) {
+            if (!listing.allergenInfoConfirmed) return false;
+
+            const itemDietTags = new Set(
+              [...(listing.dietaryTags || []), ...(listing.dietTags || [])].map((t) => t.toLowerCase())
+            );
+
             const matchesDiet = filters.diet.every((d) => {
               if (d === 'veg') {
-                const isVegName = /\b(veg|paneer|dal|tiffin|sabzi)\b/i.test(listing.name);
-                return isVegName || listing.category === 'Bakery';
+                return (
+                  itemDietTags.has('veg') ||
+                  itemDietTags.has('vegetarian') ||
+                  itemDietTags.has('jain')
+                );
               }
               if (d === 'vegan') {
-                return /\b(vegan|plant)\b/i.test(listing.name) || /\b(vegan|plant)\b/i.test(listing.description);
+                return itemDietTags.has('vegan');
               }
               if (d === 'egg_free') {
-                return !/\b(egg|omelette)\b/i.test(listing.name);
+                return (
+                  itemDietTags.has('egg_free') ||
+                  itemDietTags.has('eggless') ||
+                  itemDietTags.has('egg-free')
+                );
               }
-              return true;
+              if (d === 'jain') {
+                return itemDietTags.has('jain');
+              }
+              if (d === 'halal') {
+                return itemDietTags.has('halal');
+              }
+              return itemDietTags.has(d.toLowerCase());
             });
             if (!matchesDiet) return false;
+          }
+
+          // Allergen exclusion filters
+          // SAFETY CRITICAL RULE: Unconfirmed listings must NEVER match allergen exclusion filters!
+          if (filters.excludeAllergens && filters.excludeAllergens.length > 0) {
+            if (!listing.allergenInfoConfirmed) return false;
+
+            const containsAllergens = (listing.allergens || []).map((a) => a.toLowerCase());
+            const tracesAllergens = (listing.mayContain || []).map((a) => a.toLowerCase());
+
+            const hasExcludedAllergen = filters.excludeAllergens.some((ex) => {
+              const exLower = ex.toLowerCase();
+              return containsAllergens.includes(exLower) || tracesAllergens.includes(exLower);
+            });
+            if (hasExcludedAllergen) return false;
           }
 
           // Area
@@ -315,13 +350,43 @@ export default function ExploreScreen() {
 
     if (activeFilters.diet && activeFilters.diet.length > 0) {
       for (const d of activeFilters.diet) {
-        const title = d === 'veg' ? 'Veg' : d === 'vegan' ? 'Vegan' : d === 'egg_free' ? 'Egg-Free' : 'Nut-Free';
+        const title =
+          d === 'veg'
+            ? '🌱 Veg'
+            : d === 'vegan'
+              ? '🌿 Vegan'
+              : d === 'egg_free'
+                ? '🥚 Egg-Free'
+                : d === 'jain'
+                  ? '✨ Jain'
+                  : d === 'halal'
+                    ? '☪️ Halal'
+                    : d;
         chips.push({
           id: `diet-${d}`,
           label: title,
           onRemove: () =>
             setActiveFilters((prev) =>
               prev ? { ...prev, diet: (prev.diet || []).filter((item) => item !== d) } : null,
+            ),
+        });
+      }
+    }
+
+    if (activeFilters.excludeAllergens && activeFilters.excludeAllergens.length > 0) {
+      for (const ex of activeFilters.excludeAllergens) {
+        const title = `No ${ex.charAt(0).toUpperCase() + ex.slice(1)}`;
+        chips.push({
+          id: `exclude-${ex}`,
+          label: title,
+          onRemove: () =>
+            setActiveFilters((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    excludeAllergens: (prev.excludeAllergens || []).filter((item) => item !== ex),
+                  }
+                : null,
             ),
         });
       }
@@ -582,6 +647,89 @@ export default function ExploreScreen() {
           })}
         </ScrollView>
 
+        {/* Quick Safety & Dietary Filters Row */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.dietFiltersRow}
+        >
+          {[
+            { id: 'veg', type: 'diet' as const, label: '🌱 Veg' },
+            { id: 'vegan', type: 'diet' as const, label: '🌿 Vegan' },
+            { id: 'jain', type: 'diet' as const, label: '✨ Jain' },
+            { id: 'halal', type: 'diet' as const, label: '☪️ Halal' },
+            { id: 'milk', type: 'allergen' as const, label: '🥛 No Dairy' },
+            { id: 'peanuts', type: 'allergen' as const, label: '🥜 No Peanuts' },
+            { id: 'tree_nuts', type: 'allergen' as const, label: '🌰 No Tree Nuts' },
+            { id: 'gluten', type: 'allergen' as const, label: '🌾 No Gluten' },
+          ].map((item) => {
+            const isDietActive = item.type === 'diet' && (activeFilters?.diet || []).includes(item.id as any);
+            const isAllergenActive =
+              item.type === 'allergen' && (activeFilters?.excludeAllergens || []).includes(item.id as any);
+            const isActive = isDietActive || isAllergenActive;
+
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => {
+                  Haptics.selectionAsync?.();
+                  if (item.type === 'diet') {
+                    setActiveFilters((prev) => {
+                      const cur = prev?.diet || [];
+                      const next = cur.includes(item.id as any)
+                        ? cur.filter((d) => d !== item.id)
+                        : [...cur, item.id as any];
+                      return {
+                        keywords: prev?.keywords || [],
+                        diet: next,
+                        excludeAllergens: prev?.excludeAllergens || [],
+                        nearMe: prev?.nearMe || false,
+                        sortBy: prev?.sortBy || 'distance',
+                        category: prev?.category,
+                        maxPrice: prev?.maxPrice,
+                        area: prev?.area,
+                      };
+                    });
+                  } else {
+                    setActiveFilters((prev) => {
+                      const cur = prev?.excludeAllergens || [];
+                      const next = cur.includes(item.id as any)
+                        ? cur.filter((a) => a !== item.id)
+                        : [...cur, item.id as any];
+                      return {
+                        keywords: prev?.keywords || [],
+                        diet: prev?.diet || [],
+                        excludeAllergens: next,
+                        nearMe: prev?.nearMe || false,
+                        sortBy: prev?.sortBy || 'distance',
+                        category: prev?.category,
+                        maxPrice: prev?.maxPrice,
+                        area: prev?.area,
+                      };
+                    });
+                  }
+                }}
+                style={[
+                  styles.dietFilterChip,
+                  {
+                    backgroundColor: isActive ? '#1e5436' : colors.card,
+                    borderColor: isActive ? '#1e5436' : colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dietFilterChipText,
+                    { color: isActive ? '#ffffff' : colors.foreground },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
         {/* Relaxed Filter Notice Banner */}
         {relaxedMessage && (
           <View style={[styles.relaxedNotice, { backgroundColor: colors.accent, borderColor: colors.border }]}>
@@ -823,4 +971,18 @@ const styles = StyleSheet.create({
   impact: { borderRadius: 19, padding: 15, marginTop: 2, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 12 },
   impactTitle: { fontWeight: '700', fontSize: 12 },
   impactCopy: { fontSize: 11, marginTop: 3, lineHeight: 16 },
+  dietFiltersRow: {
+    gap: 6,
+    paddingBottom: 14,
+  },
+  dietFilterChip: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+  dietFilterChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
 });

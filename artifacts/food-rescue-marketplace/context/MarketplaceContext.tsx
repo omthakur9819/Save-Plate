@@ -41,6 +41,14 @@ export interface FoodListing {
   longitude: number;
   description: string;
   isMine?: boolean;
+  dietaryTags?: string[];
+  dietTags?: string[];
+  allergens?: string[];
+  mayContain?: string[];
+  allergenInfoConfirmed?: boolean;
+  allergenConfirmedAt?: string | null;
+  allergenConfirmedBy?: string | null;
+  aiSuggestion?: any;
 }
 
 export interface PickupOrder {

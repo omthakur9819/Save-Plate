@@ -21,6 +21,33 @@ export const FoodListingPhoto = {
   lunch: 'lunch',
 } as const;
 
+export type DietaryTag = typeof DietaryTag[keyof typeof DietaryTag];
+
+
+export const DietaryTag = {
+  vegetarian: 'vegetarian',
+  vegan: 'vegan',
+  egg_free: 'egg_free',
+  jain: 'jain',
+  halal: 'halal',
+} as const;
+
+export type AllergenTag = typeof AllergenTag[keyof typeof AllergenTag];
+
+
+export const AllergenTag = {
+  milk: 'milk',
+  egg: 'egg',
+  peanuts: 'peanuts',
+  tree_nuts: 'tree_nuts',
+  gluten: 'gluten',
+  soy: 'soy',
+  fish: 'fish',
+  shellfish: 'shellfish',
+  sesame: 'sesame',
+  mustard: 'mustard',
+} as const;
+
 export interface FoodListing {
   id: string;
   vendorId: string;
@@ -42,6 +69,12 @@ export interface FoodListing {
   createdAt: string;
   discountPercent: number;
   photo: FoodListingPhoto;
+  dietTags?: DietaryTag[];
+  allergens?: AllergenTag[];
+  mayContain?: AllergenTag[];
+  allergenInfoConfirmed: boolean;
+  allergenConfirmedAt?: string | null;
+  allergenConfirmedBy?: string | null;
 }
 
 export type CreateListingInputCategory = typeof CreateListingInputCategory[keyof typeof CreateListingInputCategory];
@@ -64,6 +97,8 @@ export const CreateListingInputDietaryTagsItem = {
   'dairy-free': 'dairy-free',
   jain: 'jain',
 } as const;
+
+export type CreateListingInputAiSuggestion = { [key: string]: unknown } | null;
 
 export type CreateListingInputPhoto = typeof CreateListingInputPhoto[keyof typeof CreateListingInputPhoto];
 
@@ -117,6 +152,11 @@ export interface CreateListingInput {
      */
   longitude: number | null;
   dietaryTags: CreateListingInputDietaryTagsItem[];
+  dietTags?: DietaryTag[];
+  allergens?: AllergenTag[];
+  mayContain?: AllergenTag[];
+  allergenInfoConfirmed?: boolean;
+  aiSuggestion?: CreateListingInputAiSuggestion;
   expiresAt: string;
   photo: CreateListingInputPhoto;
 }
@@ -276,6 +316,8 @@ export const SearchFiltersDietItem = {
   vegan: 'vegan',
   egg_free: 'egg_free',
   nut_free: 'nut_free',
+  jain: 'jain',
+  halal: 'halal',
 } as const;
 
 export type SearchFiltersSortBy = typeof SearchFiltersSortBy[keyof typeof SearchFiltersSortBy];
@@ -291,12 +333,47 @@ export interface SearchFilters {
   keywords?: string[];
   category?: SearchFiltersCategory;
   diet?: SearchFiltersDietItem[];
+  excludeAllergens?: AllergenTag[];
   maxPrice?: number;
   area?: string;
   nearMe?: boolean;
   maxDistanceKm?: number;
   pickupAfter?: string;
   sortBy?: SearchFiltersSortBy;
+}
+
+export type TagConfidence = typeof TagConfidence[keyof typeof TagConfidence];
+
+
+export const TagConfidence = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+} as const;
+
+export interface TagSuggestion {
+  tag: string;
+  confidence: TagConfidence;
+  reason: string;
+}
+
+export interface SuggestTagsInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /** @maxLength 1000 */
+  description?: string;
+  imageUrl?: string;
+}
+
+export interface SuggestTagsResponse {
+  dietary: TagSuggestion[];
+  allergens: TagSuggestion[];
+  mayContain: TagSuggestion[];
+  aiAvailable: boolean;
+  warnings?: string[];
 }
 
 export type GetListingsParams = {

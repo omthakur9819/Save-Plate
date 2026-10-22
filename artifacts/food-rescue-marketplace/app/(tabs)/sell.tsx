@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   DimensionValue,
   Image,
@@ -36,6 +37,27 @@ const PRESET_FOOD_PHOTOS = [
   { label: '🍱 Fresh Meal Box', uri: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80' },
   { label: '🥪 Artisan Sandwich', uri: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=600&q=80' },
   { label: '🍰 Dessert / Sweets', uri: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=600&q=80' },
+] as const;
+
+export const DIETARY_CHOICES = [
+  { id: 'vegetarian', label: '🌱 Vegetarian' },
+  { id: 'vegan', label: '🌿 Vegan' },
+  { id: 'egg_free', label: '🥚 Egg-Free' },
+  { id: 'jain', label: '✨ Jain' },
+  { id: 'halal', label: '☪️ Halal' },
+] as const;
+
+export const ALLERGEN_CHOICES = [
+  { id: 'milk', label: '🥛 Milk/Dairy' },
+  { id: 'egg', label: '🥚 Egg' },
+  { id: 'peanuts', label: '🥜 Peanuts' },
+  { id: 'tree_nuts', label: '🌰 Tree Nuts' },
+  { id: 'gluten', label: '🌾 Gluten/Wheat' },
+  { id: 'soy', label: '🫘 Soy' },
+  { id: 'fish', label: '🐟 Fish' },
+  { id: 'shellfish', label: '🦐 Shellfish' },
+  { id: 'sesame', label: '🌱 Sesame' },
+  { id: 'mustard', label: '🌿 Mustard' },
 ] as const;
 
 function Field({
@@ -152,6 +174,158 @@ export default function VendorScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [lastPublishedId, setLastPublishedId] = useState<string | null>(null);
 
+  // Allergen & Dietary Tagging State
+  const [description, setDescription] = useState('');
+  const [dietTags, setDietTags] = useState<string[]>([]);
+  const [allergens, setAllergens] = useState<string[]>([]);
+  const [mayContain, setMayContain] = useState<string[]>([]);
+  const [allergenInfoConfirmed, setAllergenInfoConfirmed] = useState(false);
+  const [isTagging, setIsTagging] = useState(false);
+  const [tagSuggestions, setTagSuggestions] = useState<{
+    dietary: Array<{ tag: string; confidence: 'high' | 'medium' | 'low'; reason: string }>;
+    allergens: Array<{ tag: string; confidence: 'high' | 'medium' | 'low'; reason: string }>;
+    mayContain: Array<{ tag: string; confidence: 'high' | 'medium' | 'low'; reason: string }>;
+  } | null>(null);
+
+  // Local contradiction checker for real-time vendor feedback
+  const contradictionWarning = useMemo(() => {
+    const full = `${name} ${description}`.toLowerCase();
+
+    if (dietTags.includes('vegan')) {
+      if (allergens.includes('milk') || allergens.includes('egg') || allergens.includes('fish') || allergens.includes('shellfish')) {
+        return 'Contradiction: Item cannot be marked Vegan while containing milk, egg, or seafood allergens.';
+      }
+      if (/\b(milk|butter|ghee|cheese|paneer|curd|dahi|cream|malai|mawa|khoya|egg|eggs|fish|chicken|mutton|prawns)\b/i.test(full)) {
+        return 'Contradiction: Item cannot be marked Vegan because dairy, egg, or animal products were mentioned in title/description.';
+      }
+    }
+
+    if (dietTags.includes('vegetarian')) {
+      if (allergens.includes('fish') || allergens.includes('shellfish')) {
+        return 'Contradiction: Item cannot be marked Vegetarian while containing seafood allergens.';
+      }
+      if (/\b(chicken|mutton|pork|fish|prawn|prawns|crab|lobster|shrimp|meat|beef)\b/i.test(full)) {
+        return 'Contradiction: Item cannot be marked Vegetarian because meat or seafood was mentioned.';
+      }
+    }
+
+    if (dietTags.includes('egg_free')) {
+      if (allergens.includes('egg')) {
+        return 'Contradiction: Item cannot be marked Egg-Free while selecting Egg under Contains Allergens.';
+      }
+      if (/\b(egg|eggs|anda|baida|omelette)\b/i.test(full)) {
+        return 'Contradiction: Item cannot be marked Egg-Free because eggs are mentioned.';
+      }
+    }
+
+    if (dietTags.includes('jain')) {
+      if (/\b(onion|garlic|potato|potatoes|aloo|carrot|carrots|radish|mooli|beetroot|non[\s\-]?veg|chicken|mutton|egg)\b/i.test(full)) {
+        return 'Contradiction: Item cannot be marked Jain because root vegetables (onion, garlic, potato) or non-veg are mentioned.';
+      }
+    }
+
+    return null;
+  }, [name, description, dietTags, allergens]);
+
+  // AI Tag suggestion handler (5s timeout, rate-limited backend with fallback)
+  const runAutoTagging = async (overrideName?: string, overrideDesc?: string) => {
+    const titleToUse = overrideName ?? name;
+    const descToUse = overrideDesc ?? description;
+    if (!titleToUse.trim()) {
+      Alert.alert('Item Name Required', 'Please enter a food title before generating suggestions.');
+      return;
+    }
+    setIsTagging(true);
+    setFormError(null);
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const res = await fetch(`${apiUrl}/api/listings/suggest-tags`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-marketplace-user-id': currentUser?.id || 'demo-vendor-1',
+        },
+        body: JSON.stringify({
+          title: titleToUse.trim(),
+          description: descToUse.trim() || undefined,
+          imageUrl: imageUri || undefined,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        setTagSuggestions(data);
+        // Pre-fill suggestions, but vendor must explicitly confirm!
+        setDietTags(Array.from(new Set(data.dietary.map((d: any) => d.tag))));
+        setAllergens(Array.from(new Set(data.allergens.map((a: any) => a.tag))));
+        setMayContain(Array.from(new Set(data.mayContain.map((m: any) => m.tag))));
+        setAllergenInfoConfirmed(false);
+        Haptics.notificationAsync?.(Haptics.NotificationFeedbackType.Success);
+      } else {
+        // Fallback local heuristic tagging if API unavailable
+        fallbackLocalTagging(titleToUse, descToUse);
+      }
+    } catch {
+      // Offline / network timeout fallback
+      fallbackLocalTagging(titleToUse, descToUse);
+    } finally {
+      setIsTagging(false);
+    }
+  };
+
+  const fallbackLocalTagging = (t: string, d: string) => {
+    const text = `${t} ${d}`.toLowerCase();
+    const suggestedDiet: string[] = [];
+    const suggestedAllergens: string[] = [];
+    const suggestedMayContain: string[] = [];
+    const reasons: Array<{ tag: string; confidence: 'high' | 'medium' | 'low'; reason: string }> = [];
+
+    if (/\b(paneer|butter|ghee|cheese|cream|milk|dahi|curd|croissant|brioche)\b/i.test(text)) {
+      suggestedAllergens.push('milk');
+      reasons.push({ tag: 'milk', confidence: 'high', reason: 'Contains dairy ingredient' });
+    }
+    if (/\b(bread|croissant|flour|maida|roti|pav|bun|pastry|cake|cookie)\b/i.test(text)) {
+      suggestedAllergens.push('gluten');
+      reasons.push({ tag: 'gluten', confidence: 'high', reason: 'Contains wheat/gluten' });
+    }
+    if (/\b(walnut|almond|cashew|kaju|badam|pista|hazelnut|pecan)\b/i.test(text)) {
+      suggestedAllergens.push('tree_nuts');
+      reasons.push({ tag: 'tree_nuts', confidence: 'high', reason: 'Contains tree nuts' });
+    }
+    if (/\b(peanut|peanuts|shengdana|singdana)\b/i.test(text)) {
+      suggestedAllergens.push('peanuts');
+      reasons.push({ tag: 'peanuts', confidence: 'high', reason: 'Contains peanuts' });
+    }
+    if (/\b(egg|eggs|anda|baida|omelette)\b/i.test(text)) {
+      suggestedAllergens.push('egg');
+      reasons.push({ tag: 'egg', confidence: 'high', reason: 'Contains eggs' });
+    } else {
+      suggestedDiet.push('egg_free');
+    }
+    if (/\b(fish|prawn|prawns|crab|seafood|surmai|pomfret|bombil)\b/i.test(text)) {
+      suggestedAllergens.push('fish');
+      reasons.push({ tag: 'fish', confidence: 'high', reason: 'Contains fish/seafood' });
+    } else {
+      suggestedDiet.push('vegetarian');
+    }
+
+    setDietTags(suggestedDiet);
+    setAllergens(suggestedAllergens);
+    setMayContain(suggestedMayContain);
+    setAllergenInfoConfirmed(false);
+    setTagSuggestions({
+      dietary: suggestedDiet.map((tag) => ({ tag, confidence: 'high', reason: 'Detected from keywords' })),
+      allergens: reasons,
+      mayContain: [],
+    });
+    Haptics.notificationAsync?.(Haptics.NotificationFeedbackType.Success);
+  };
+
   const pickImage = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
@@ -205,6 +379,7 @@ export default function VendorScreen() {
   const fillDemoOffer = () => {
     setName('Evening Brioche & Croissant Bag');
     setVendor('Bandra Artisan Bakers');
+    setDescription('Artisanal French butter brioche and sourdough croissants baked fresh daily with whole milk butter and wheat flour.');
     setCategory('Bakery');
     setPrice('120');
     setOriginalPrice('350');
@@ -212,6 +387,18 @@ export default function VendorScreen() {
     setPickupWindow('Today, 6:30–8:00 PM');
     setArea('Juhu');
     setImageUri(PRESET_FOOD_PHOTOS[0].uri);
+    setDietTags(['vegetarian']);
+    setAllergens(['gluten', 'milk']);
+    setMayContain(['tree_nuts', 'egg']);
+    setAllergenInfoConfirmed(true);
+    setTagSuggestions({
+      dietary: [{ tag: 'vegetarian', confidence: 'high', reason: 'No meat or seafood used in bakery' }],
+      allergens: [
+        { tag: 'gluten', confidence: 'high', reason: 'Prepared with wheat flour' },
+        { tag: 'milk', confidence: 'high', reason: 'Rich dairy butter in brioche and croissant' },
+      ],
+      mayContain: [{ tag: 'egg', confidence: 'medium', reason: 'Egg wash used on pastries in bakehouse' }],
+    });
     const coords = getCoordinatesForArea('Juhu');
     setCoordinates(coords);
     setPickerCoords(coords);
@@ -376,6 +563,22 @@ export default function VendorScreen() {
       Alert.alert('Add available portions', msg);
       return;
     }
+
+    // MANDATORY SAFETY CHECK: Allergen info confirmation required
+    if (!allergenInfoConfirmed) {
+      const msg = 'Please review and check the confirmation box verifying that the dietary and allergen information is accurate before posting.';
+      setFormError(msg);
+      Alert.alert('Confirm Allergen Safety', msg);
+      return;
+    }
+
+    // Contradiction prevention
+    if (contradictionWarning) {
+      setFormError(contradictionWarning);
+      Alert.alert('Contradictory Tags', contradictionWarning);
+      return;
+    }
+
     const photo: ListingPhoto = category === 'Bakery' ? 'bakery' : 'lunch';
     const newId = addListing({
       name: name.trim(),
@@ -391,19 +594,33 @@ export default function VendorScreen() {
       distance: 'Nearby',
       photo,
       imageUri: imageUri || undefined,
-      description: `${name.trim()} from ${vendor.trim()}, available for a neighborhood pickup.`,
+      description: description.trim() || `${name.trim()} from ${vendor.trim()}, available for a neighborhood pickup.`,
+      dietaryTags: dietTags,
+      dietTags,
+      allergens,
+      mayContain,
+      allergenInfoConfirmed: true,
+      allergenConfirmedAt: new Date().toISOString(),
+      allergenConfirmedBy: currentUser?.id || 'vendor',
+      aiSuggestion: tagSuggestions,
     });
     setLastPublishedId(newId);
     setName('');
+    setDescription('');
     setVendor('');
     setPrice('');
     setOriginalPrice('');
     setQuantity('');
     setImageUri(null);
+    setDietTags([]);
+    setAllergens([]);
+    setMayContain([]);
+    setAllergenInfoConfirmed(false);
+    setTagSuggestions(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Alert.alert(
       'Your offer is live!',
-      'Your surplus food has been pinned to the neighborhood map for nearby shoppers.',
+      'Your surplus food and verified allergen details are now published.',
       [
         {
           text: 'View on Map',
@@ -567,6 +784,22 @@ export default function VendorScreen() {
 
           <Field label="What’s available?" value={name} onChangeText={(t) => { setName(t); setFormError(null); }} placeholder="e.g. End-of-day pastry bag" testID="listing-name" />
           <Field label="Shop name" value={vendor} onChangeText={(t) => { setVendor(t); setFormError(null); }} placeholder="Your bakery or cafe" testID="vendor-name" />
+
+          {/* Description & Ingredients Field */}
+          <View style={styles.field}>
+            <Text style={[styles.label, { color: colors.foreground }]}>Ingredients & Details</Text>
+            <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border, minHeight: 64, paddingVertical: 8, alignItems: 'flex-start' }]}>
+              <TextInput
+                value={description}
+                onChangeText={(t) => { setDescription(t); setFormError(null); }}
+                placeholder="e.g. Sourdough croissants made with whole wheat flour and churned milk butter..."
+                placeholderTextColor={colors.mutedForeground}
+                multiline
+                style={[styles.input, { color: colors.foreground, textAlignVertical: 'top' }]}
+                testID="listing-description"
+              />
+            </View>
+          </View>
 
           {/* Food Photo Section */}
           <View style={styles.photoSection}>
@@ -817,18 +1050,261 @@ export default function VendorScreen() {
             </View>
           </View>
 
+          {/* Allergen & Dietary Verification Section */}
+          <View style={[styles.allergenSection, { borderColor: colors.border, backgroundColor: colors.background }]}>
+            <View style={styles.allergenHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.allergenSectionTitle, { color: colors.foreground }]}>
+                  Allergen & Dietary Safety
+                </Text>
+                <Text style={[styles.allergenSectionSubtitle, { color: colors.mutedForeground }]}>
+                  Required review · AI suggests, vendor confirms
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => runAutoTagging()}
+                disabled={isTagging}
+                style={[styles.aiDetectBtn, { backgroundColor: '#173b2d' }]}
+                accessibilityRole="button"
+                testID="ai-auto-tag-btn"
+              >
+                {isTagging ? (
+                  <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 6 }} />
+                ) : (
+                  <Feather name="zap" size={13} color="#ffffff" style={{ marginRight: 6 }} />
+                )}
+                <Text style={styles.aiDetectBtnText}>
+                  {isTagging ? 'Analyzing...' : 'Auto-Detect (AI)'}
+                </Text>
+              </Pressable>
+            </View>
+
+            {tagSuggestions && (
+              <View style={[styles.aiNoticePill, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
+                <Feather name="info" size={13} color="#166534" />
+                <Text style={[styles.aiNoticeText, { color: '#166534' }]}>
+                  Suggested by AI based on title and ingredients. Please check and confirm.
+                </Text>
+              </View>
+            )}
+
+            {/* Dietary Tags */}
+            <View style={styles.tagGroup}>
+              <Text style={[styles.tagGroupLabel, { color: colors.foreground }]}>
+                Dietary Category
+              </Text>
+              <View style={styles.tagChipsWrap}>
+                {DIETARY_CHOICES.map((choice) => {
+                  const selected = dietTags.includes(choice.id);
+                  return (
+                    <Pressable
+                      key={choice.id}
+                      onPress={() => {
+                        setDietTags((prev) =>
+                          prev.includes(choice.id) ? prev.filter((d) => d !== choice.id) : [...prev, choice.id]
+                        );
+                        setAllergenInfoConfirmed(false);
+                        Haptics.selectionAsync();
+                      }}
+                      style={[
+                        styles.tagChip,
+                        {
+                          backgroundColor: selected ? '#15803d' : colors.card,
+                          borderColor: selected ? '#15803d' : colors.border,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.tagChipText, { color: selected ? '#ffffff' : colors.foreground }]}>
+                        {choice.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Contains Allergens */}
+            <View style={styles.tagGroup}>
+              <Text style={[styles.tagGroupLabel, { color: colors.foreground }]}>
+                Contains Allergens
+              </Text>
+              <View style={styles.tagChipsWrap}>
+                {ALLERGEN_CHOICES.map((choice) => {
+                  const selected = allergens.includes(choice.id);
+                  return (
+                    <Pressable
+                      key={choice.id}
+                      onPress={() => {
+                        setAllergens((prev) => {
+                          const next = prev.includes(choice.id)
+                            ? prev.filter((a) => a !== choice.id)
+                            : [...prev, choice.id];
+                          return next;
+                        });
+                        setMayContain((prev) => prev.filter((m) => m !== choice.id));
+                        setAllergenInfoConfirmed(false);
+                        Haptics.selectionAsync();
+                      }}
+                      style={[
+                        styles.tagChip,
+                        {
+                          backgroundColor: selected ? '#dc2626' : colors.card,
+                          borderColor: selected ? '#dc2626' : colors.border,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.tagChipText, { color: selected ? '#ffffff' : colors.foreground }]}>
+                        {choice.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* May Contain Traces */}
+            <View style={styles.tagGroup}>
+              <Text style={[styles.tagGroupLabel, { color: colors.foreground }]}>
+                May Contain Traces Of (Facility / Cross-Contact)
+              </Text>
+              <View style={styles.tagChipsWrap}>
+                {ALLERGEN_CHOICES.map((choice) => {
+                  const selected = mayContain.includes(choice.id);
+                  return (
+                    <Pressable
+                      key={choice.id}
+                      onPress={() => {
+                        setMayContain((prev) => {
+                          const next = prev.includes(choice.id)
+                            ? prev.filter((m) => m !== choice.id)
+                            : [...prev, choice.id];
+                          return next;
+                        });
+                        setAllergens((prev) => prev.filter((a) => a !== choice.id));
+                        setAllergenInfoConfirmed(false);
+                        Haptics.selectionAsync();
+                      }}
+                      style={[
+                        styles.tagChip,
+                        {
+                          backgroundColor: selected ? '#d97706' : colors.card,
+                          borderColor: selected ? '#d97706' : colors.border,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.tagChipText, { color: selected ? '#ffffff' : colors.foreground }]}>
+                        {choice.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* AI Reasoning Hints if available */}
+            {tagSuggestions && (tagSuggestions.allergens.length > 0 || tagSuggestions.dietary.length > 0) && (
+              <View style={[styles.aiReasoningBox, { borderColor: colors.border }]}>
+                <Text style={[styles.aiReasoningTitle, { color: colors.mutedForeground }]}>
+                  Why AI suggested these tags:
+                </Text>
+                {tagSuggestions.allergens.map((item) => (
+                  <Text key={`reason-${item.tag}`} style={[styles.aiReasonItem, { color: colors.foreground }]}>
+                    • <Text style={{ fontWeight: '700' }}>{item.tag}</Text>: {item.reason} ({item.confidence})
+                  </Text>
+                ))}
+                {tagSuggestions.dietary.map((item) => (
+                  <Text key={`reason-diet-${item.tag}`} style={[styles.aiReasonItem, { color: colors.foreground }]}>
+                    • <Text style={{ fontWeight: '700' }}>{item.tag}</Text>: {item.reason}
+                  </Text>
+                ))}
+              </View>
+            )}
+
+            {/* Real-time Contradiction Warning */}
+            {contradictionWarning && (
+              <View style={styles.contradictionAlert}>
+                <Feather name="alert-triangle" size={16} color="#b91c1c" />
+                <Text style={styles.contradictionAlertText}>{contradictionWarning}</Text>
+              </View>
+            )}
+
+            {/* MANDATORY Safety Confirmation Checkbox */}
+            <Pressable
+              onPress={() => {
+                setAllergenInfoConfirmed(!allergenInfoConfirmed);
+                Haptics.selectionAsync();
+              }}
+              style={[
+                styles.confirmCheckboxCard,
+                {
+                  borderColor: allergenInfoConfirmed ? '#2b8253' : '#d97706',
+                  backgroundColor: allergenInfoConfirmed ? '#f0fdf4' : '#fffbeb',
+                },
+              ]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: allergenInfoConfirmed }}
+              testID="confirm-allergen-checkbox"
+            >
+              <View
+                style={[
+                  styles.checkboxSquare,
+                  {
+                    backgroundColor: allergenInfoConfirmed ? '#2b8253' : '#ffffff',
+                    borderColor: allergenInfoConfirmed ? '#2b8253' : '#d97706',
+                  },
+                ]}
+              >
+                {allergenInfoConfirmed && <Feather name="check" size={14} color="#ffffff" />}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    styles.confirmCheckboxTitle,
+                    { color: allergenInfoConfirmed ? '#166534' : '#92400e' },
+                  ]}
+                >
+                  I confirm this allergen and dietary information is accurate.
+                </Text>
+                <Text
+                  style={[
+                    styles.confirmCheckboxSubtitle,
+                    { color: allergenInfoConfirmed ? '#15803d' : '#b45309' },
+                  ]}
+                >
+                  Mandatory: Incorrect allergen info can cause severe harm.
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+
+          {!allergenInfoConfirmed && (
+            <View style={styles.lockNotice}>
+              <Feather name="lock" size={12} color="#b45309" />
+              <Text style={styles.lockNoticeText}>
+                Check the confirmation box above to enable posting
+              </Text>
+            </View>
+          )}
+
           <Pressable
             onPress={publish}
+            disabled={!allergenInfoConfirmed}
             style={({ pressed }) => [
               styles.publishButton,
-              { backgroundColor: colors.primary },
-              pressed && styles.pressed,
+              { backgroundColor: allergenInfoConfirmed ? colors.primary : '#9ca3af' },
+              pressed && allergenInfoConfirmed && styles.pressed,
             ]}
             accessibilityRole="button"
             testID="publish-listing"
           >
-            <Feather name="send" size={15} color={colors.primaryForeground} />
-            <Text style={[styles.publishText, { color: colors.primaryForeground }]}>Post this offer</Text>
+            <Feather
+              name={allergenInfoConfirmed ? "send" : "lock"}
+              size={15}
+              color={colors.primaryForeground}
+            />
+            <Text style={[styles.publishText, { color: colors.primaryForeground }]}>
+              {allergenInfoConfirmed ? 'Post this offer' : 'Confirm allergen info to post'}
+            </Text>
           </Pressable>
           <Text style={[styles.disclaimer, { color: colors.mutedForeground }]}>
             Neighbors reserve online and pay when they pick up.
@@ -1443,6 +1919,150 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 16,
     gap: 12,
+  },
+  allergenSection: {
+    marginTop: 16,
+    marginBottom: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+  },
+  allergenHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    gap: 8,
+  },
+  allergenSectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  allergenSectionSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  aiDetectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  aiDetectBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  aiNoticePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  aiNoticeText: {
+    fontSize: 11,
+    flex: 1,
+    lineHeight: 15,
+  },
+  tagGroup: {
+    marginBottom: 12,
+  },
+  tagGroupLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  tagChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  tagChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  tagChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  aiReasoningBox: {
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    marginBottom: 12,
+    backgroundColor: 'rgba(0,0,0,0.02)',
+  },
+  aiReasoningTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  aiReasonItem: {
+    fontSize: 11,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  contradictionAlert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    marginBottom: 12,
+  },
+  contradictionAlertText: {
+    color: '#b91c1c',
+    fontSize: 11,
+    fontWeight: '700',
+    flex: 1,
+  },
+  confirmCheckboxCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginTop: 4,
+  },
+  checkboxSquare: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCheckboxTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  confirmCheckboxSubtitle: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  lockNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 6,
+    marginTop: 6,
+  },
+  lockNoticeText: {
+    fontSize: 11,
+    color: '#b45309',
+    fontWeight: '600',
   },
 });
 

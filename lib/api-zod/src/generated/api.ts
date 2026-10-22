@@ -23,13 +23,15 @@ export const ParseNaturalSearchBody = zod.object({
 
 export const parseNaturalSearchResponseKeywordsDefault = [];
 export const parseNaturalSearchResponseDietDefault = [];
+export const parseNaturalSearchResponseExcludeAllergensDefault = [];
 export const parseNaturalSearchResponseNearMeDefault = false;
 export const parseNaturalSearchResponseSortByDefault = `distance`;
 
 export const ParseNaturalSearchResponse = zod.object({
   "keywords": zod.array(zod.string()).default(parseNaturalSearchResponseKeywordsDefault),
   "category": zod.enum(['bakery', 'cafe', 'meals']).optional(),
-  "diet": zod.array(zod.enum(['veg', 'vegan', 'egg_free', 'nut_free'])).default(parseNaturalSearchResponseDietDefault),
+  "diet": zod.array(zod.enum(['veg', 'vegan', 'egg_free', 'nut_free', 'jain', 'halal'])).default(parseNaturalSearchResponseDietDefault),
+  "excludeAllergens": zod.array(zod.enum(['milk', 'egg', 'peanuts', 'tree_nuts', 'gluten', 'soy', 'fish', 'shellfish', 'sesame', 'mustard'])).default(parseNaturalSearchResponseExcludeAllergensDefault),
   "maxPrice": zod.number().optional(),
   "area": zod.string().optional(),
   "nearMe": zod.boolean().default(parseNaturalSearchResponseNearMeDefault),
@@ -85,6 +87,11 @@ export const GetListingsQueryParams = zod.object({
   "sort": zod.enum(['distance', 'expiring', 'discount']).optional()
 })
 
+export const getListingsResponseDietTagsDefault = [];
+export const getListingsResponseAllergensDefault = [];
+export const getListingsResponseMayContainDefault = [];
+export const getListingsResponseAllergenInfoConfirmedDefault = false;
+
 export const GetListingsResponseItem = zod.object({
   "id": zod.string().uuid(),
   "vendorId": zod.string().uuid(),
@@ -105,7 +112,13 @@ export const GetListingsResponseItem = zod.object({
   "expiresAt": zod.coerce.date(),
   "createdAt": zod.coerce.date(),
   "discountPercent": zod.number().int(),
-  "photo": zod.enum(['bakery', 'lunch'])
+  "photo": zod.enum(['bakery', 'lunch']),
+  "dietTags": zod.array(zod.enum(['vegetarian', 'vegan', 'egg_free', 'jain', 'halal'])).default(getListingsResponseDietTagsDefault),
+  "allergens": zod.array(zod.enum(['milk', 'egg', 'peanuts', 'tree_nuts', 'gluten', 'soy', 'fish', 'shellfish', 'sesame', 'mustard'])).default(getListingsResponseAllergensDefault),
+  "mayContain": zod.array(zod.enum(['milk', 'egg', 'peanuts', 'tree_nuts', 'gluten', 'soy', 'fish', 'shellfish', 'sesame', 'mustard'])).default(getListingsResponseMayContainDefault),
+  "allergenInfoConfirmed": zod.boolean().default(getListingsResponseAllergenInfoConfirmedDefault),
+  "allergenConfirmedAt": zod.coerce.date().nullish(),
+  "allergenConfirmedBy": zod.string().nullish()
 })
 export const GetListingsResponse = zod.array(GetListingsResponseItem)
 
@@ -137,7 +150,10 @@ export const createListingBodyLatitudeMax = 90;
 export const createListingBodyLongitudeMin = -180;
 export const createListingBodyLongitudeMax = 180;
 
-
+export const createListingBodyDietTagsDefault = [];
+export const createListingBodyAllergensDefault = [];
+export const createListingBodyMayContainDefault = [];
+export const createListingBodyAllergenInfoConfirmedDefault = false;
 
 export const CreateListingBody = zod.object({
   "name": zod.string().min(createListingBodyNameMin).max(createListingBodyNameMax),
@@ -152,9 +168,19 @@ export const CreateListingBody = zod.object({
   "latitude": zod.number().min(createListingBodyLatitudeMin).max(createListingBodyLatitudeMax).nullable(),
   "longitude": zod.number().min(createListingBodyLongitudeMin).max(createListingBodyLongitudeMax).nullable(),
   "dietaryTags": zod.array(zod.enum(['vegan', 'vegetarian', 'halal', 'gluten-free', 'dairy-free', 'jain'])),
+  "dietTags": zod.array(zod.enum(['vegetarian', 'vegan', 'egg_free', 'jain', 'halal'])).default(createListingBodyDietTagsDefault),
+  "allergens": zod.array(zod.enum(['milk', 'egg', 'peanuts', 'tree_nuts', 'gluten', 'soy', 'fish', 'shellfish', 'sesame', 'mustard'])).default(createListingBodyAllergensDefault),
+  "mayContain": zod.array(zod.enum(['milk', 'egg', 'peanuts', 'tree_nuts', 'gluten', 'soy', 'fish', 'shellfish', 'sesame', 'mustard'])).default(createListingBodyMayContainDefault),
+  "allergenInfoConfirmed": zod.boolean().default(createListingBodyAllergenInfoConfirmedDefault),
+  "aiSuggestion": zod.record(zod.string(), zod.unknown()).nullish(),
   "expiresAt": zod.coerce.date(),
   "photo": zod.enum(['bakery', 'lunch'])
 })
+
+export const createListingResponseDietTagsDefault = [];
+export const createListingResponseAllergensDefault = [];
+export const createListingResponseMayContainDefault = [];
+export const createListingResponseAllergenInfoConfirmedDefault = false;
 
 export const CreateListingResponse = zod.object({
   "id": zod.string().uuid(),
@@ -176,7 +202,49 @@ export const CreateListingResponse = zod.object({
   "expiresAt": zod.coerce.date(),
   "createdAt": zod.coerce.date(),
   "discountPercent": zod.number().int(),
-  "photo": zod.enum(['bakery', 'lunch'])
+  "photo": zod.enum(['bakery', 'lunch']),
+  "dietTags": zod.array(zod.enum(['vegetarian', 'vegan', 'egg_free', 'jain', 'halal'])).default(createListingResponseDietTagsDefault),
+  "allergens": zod.array(zod.enum(['milk', 'egg', 'peanuts', 'tree_nuts', 'gluten', 'soy', 'fish', 'shellfish', 'sesame', 'mustard'])).default(createListingResponseAllergensDefault),
+  "mayContain": zod.array(zod.enum(['milk', 'egg', 'peanuts', 'tree_nuts', 'gluten', 'soy', 'fish', 'shellfish', 'sesame', 'mustard'])).default(createListingResponseMayContainDefault),
+  "allergenInfoConfirmed": zod.boolean().default(createListingResponseAllergenInfoConfirmedDefault),
+  "allergenConfirmedAt": zod.coerce.date().nullish(),
+  "allergenConfirmedBy": zod.string().nullish()
+})
+
+
+/**
+ * @summary Suggest dietary and allergen tags using vision/text LLM
+ */
+export const suggestListingTagsBodyTitleMax = 200;
+
+export const suggestListingTagsBodyDescriptionMax = 1000;
+
+
+
+export const SuggestListingTagsBody = zod.object({
+  "title": zod.string().min(1).max(suggestListingTagsBodyTitleMax),
+  "description": zod.string().max(suggestListingTagsBodyDescriptionMax).optional(),
+  "imageUrl": zod.string().optional()
+})
+
+export const SuggestListingTagsResponse = zod.object({
+  "dietary": zod.array(zod.object({
+  "tag": zod.string(),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "reason": zod.string()
+})),
+  "allergens": zod.array(zod.object({
+  "tag": zod.string(),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "reason": zod.string()
+})),
+  "mayContain": zod.array(zod.object({
+  "tag": zod.string(),
+  "confidence": zod.enum(['high', 'medium', 'low']),
+  "reason": zod.string()
+})),
+  "aiAvailable": zod.boolean(),
+  "warnings": zod.array(zod.string()).optional()
 })
 
 
@@ -264,6 +332,11 @@ export const GetVendorOrdersResponse = zod.array(GetVendorOrdersResponseItem)
 /**
  * @summary List active and sold-out offers owned by the current vendor
  */
+export const getVendorListingsResponseDietTagsDefault = [];
+export const getVendorListingsResponseAllergensDefault = [];
+export const getVendorListingsResponseMayContainDefault = [];
+export const getVendorListingsResponseAllergenInfoConfirmedDefault = false;
+
 export const GetVendorListingsResponseItem = zod.object({
   "id": zod.string().uuid(),
   "vendorId": zod.string().uuid(),
@@ -284,7 +357,13 @@ export const GetVendorListingsResponseItem = zod.object({
   "expiresAt": zod.coerce.date(),
   "createdAt": zod.coerce.date(),
   "discountPercent": zod.number().int(),
-  "photo": zod.enum(['bakery', 'lunch'])
+  "photo": zod.enum(['bakery', 'lunch']),
+  "dietTags": zod.array(zod.enum(['vegetarian', 'vegan', 'egg_free', 'jain', 'halal'])).default(getVendorListingsResponseDietTagsDefault),
+  "allergens": zod.array(zod.enum(['milk', 'egg', 'peanuts', 'tree_nuts', 'gluten', 'soy', 'fish', 'shellfish', 'sesame', 'mustard'])).default(getVendorListingsResponseAllergensDefault),
+  "mayContain": zod.array(zod.enum(['milk', 'egg', 'peanuts', 'tree_nuts', 'gluten', 'soy', 'fish', 'shellfish', 'sesame', 'mustard'])).default(getVendorListingsResponseMayContainDefault),
+  "allergenInfoConfirmed": zod.boolean().default(getVendorListingsResponseAllergenInfoConfirmedDefault),
+  "allergenConfirmedAt": zod.coerce.date().nullish(),
+  "allergenConfirmedBy": zod.string().nullish()
 })
 export const GetVendorListingsResponse = zod.array(GetVendorListingsResponseItem)
 

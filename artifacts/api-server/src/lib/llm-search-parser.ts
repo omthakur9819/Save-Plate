@@ -44,6 +44,7 @@ export function buildSafeFallback(query: string): SearchFiltersType {
   return {
     keywords: words,
     diet: [],
+    excludeAllergens: [],
     nearMe: false,
     sortBy: "distance",
   };
@@ -122,17 +123,34 @@ export function heuristicExtract(query: string, nowStr: string): Partial<SearchF
   const result: Partial<SearchFiltersType> = {
     keywords: [],
     diet: [],
+    excludeAllergens: [],
     nearMe: false,
     sortBy: "distance",
   };
 
   // Diet
-  const diet: ("veg" | "vegan" | "egg_free" | "nut_free")[] = [];
+  const diet: ("veg" | "vegan" | "egg_free" | "nut_free" | "jain" | "halal")[] = [];
   if (lower.includes("vegan")) diet.push("vegan");
   else if (/\b(veg|veggie|vegetarians?|shakahari)\b/.test(lower)) diet.push("veg");
   if (/\b(eggless|egg[\s\-_]?free)\b/.test(lower)) diet.push("egg_free");
   if (/\b(nut[\s\-_]?free|no nuts)\b/.test(lower)) diet.push("nut_free");
+  if (/\b(jain)\b/.test(lower)) diet.push("jain");
+  if (/\b(halal)\b/.test(lower)) diet.push("halal");
   result.diet = diet;
+
+  // Allergen exclusions
+  const excludeAllergens: ("milk" | "egg" | "peanuts" | "tree_nuts" | "gluten" | "soy" | "fish" | "shellfish" | "sesame" | "mustard")[] = [];
+  if (/\b(no dairy|dairy[\s\-_]?free|no milk|lactose[\s\-_]?free)\b/.test(lower)) excludeAllergens.push("milk");
+  if (/\b(no egg|no eggs|eggless|egg[\s\-_]?free)\b/.test(lower)) excludeAllergens.push("egg");
+  if (/\b(no peanuts|peanut[\s\-_]?free)\b/.test(lower)) excludeAllergens.push("peanuts");
+  if (/\b(no nuts|nut[\s\-_]?free)\b/.test(lower)) {
+    excludeAllergens.push("peanuts", "tree_nuts");
+  }
+  if (/\b(no gluten|gluten[\s\-_]?free|wheat[\s\-_]?free)\b/.test(lower)) excludeAllergens.push("gluten");
+  if (/\b(no soy|soy[\s\-_]?free)\b/.test(lower)) excludeAllergens.push("soy");
+  if (/\b(no fish|fish[\s\-_]?free)\b/.test(lower)) excludeAllergens.push("fish");
+  if (/\b(no shellfish|seafood[\s\-_]?free)\b/.test(lower)) excludeAllergens.push("shellfish");
+  result.excludeAllergens = Array.from(new Set(excludeAllergens));
 
   // Category
   if (/\b(bakery|breads?|breadd|croissants?|croissnt|pastr(?:y|ies)|cakes?|cookies?|buns?|brownies?|puffs?)\b/.test(lower)) {

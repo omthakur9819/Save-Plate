@@ -156,6 +156,102 @@ export default function ListingDetailScreen() {
           <View style={[styles.rule, { borderColor: colors.border }]} />
           <Text style={[styles.description, { color: colors.foreground }]}>{listing.description}</Text>
 
+          {/* Dietary & Allergen Safety Information */}
+          <View style={[styles.allergenDetailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.allergenDetailHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <Feather name="shield" size={15} color={listing.allergenInfoConfirmed ? '#2b8253' : '#b45309'} />
+                <Text style={[styles.allergenDetailTitle, { color: colors.foreground }]}>
+                  Allergen & Dietary Safety
+                </Text>
+              </View>
+              {listing.allergenInfoConfirmed ? (
+                <View style={styles.verifiedVendorPill}>
+                  <Feather name="check" size={10} color="#166534" />
+                  <Text style={styles.verifiedVendorText}>Verified by vendor</Text>
+                </View>
+              ) : (
+                <View style={styles.unverifiedVendorPill}>
+                  <Text style={styles.unverifiedVendorText}>Not verified</Text>
+                </View>
+              )}
+            </View>
+
+            {listing.allergenInfoConfirmed ? (
+              <>
+                {/* Dietary Tags */}
+                {(listing.dietaryTags || listing.dietTags || []).length > 0 && (
+                  <View style={styles.dietTagsRow}>
+                    {(listing.dietaryTags || listing.dietTags || []).map((t) => {
+                      const label =
+                        t === 'veg' || t === 'vegetarian'
+                          ? '🌱 Vegetarian'
+                          : t === 'vegan'
+                            ? '🌿 Vegan'
+                            : t === 'egg_free' || t === 'eggless'
+                              ? '🥚 Egg-Free'
+                              : t === 'jain'
+                                ? '✨ Jain'
+                                : t === 'halal'
+                                  ? '☪️ Halal'
+                                  : t;
+                      return (
+                        <View key={`detail-diet-${t}`} style={styles.dietTagBadge}>
+                          <Text style={styles.dietTagBadgeText}>{label}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Contains Allergens */}
+                {listing.allergens && listing.allergens.length > 0 ? (
+                  <View style={styles.allergenNoticeRow}>
+                    <Text style={[styles.allergenNoticeLabel, { color: '#b91c1c' }]}>
+                      Contains:
+                    </Text>
+                    <Text style={[styles.allergenNoticeValue, { color: colors.foreground }]}>
+                      {listing.allergens.join(', ')}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.allergenNoticeRow}>
+                    <Text style={[styles.allergenNoticeLabel, { color: '#166534' }]}>
+                      Does not list:
+                    </Text>
+                    <Text style={[styles.allergenNoticeValue, { color: colors.mutedForeground }]}>
+                      major common allergens
+                    </Text>
+                  </View>
+                )}
+
+                {/* May Contain Traces */}
+                {listing.mayContain && listing.mayContain.length > 0 && (
+                  <View style={styles.allergenNoticeRow}>
+                    <Text style={[styles.allergenNoticeLabel, { color: '#b45309' }]}>
+                      May contain traces of:
+                    </Text>
+                    <Text style={[styles.allergenNoticeValue, { color: colors.foreground }]}>
+                      {listing.mayContain.join(', ')}
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <Text style={[styles.unverifiedNoticeText, { color: colors.mutedForeground }]}>
+                The vendor has not provided verified allergen details for this item.
+              </Text>
+            )}
+
+            {/* Mandatory Safety Disclaimer Notice */}
+            <View style={styles.safetyDisclaimerBox}>
+              <Feather name="alert-circle" size={13} color="#b45309" style={{ marginTop: 1 }} />
+              <Text style={styles.safetyDisclaimerText}>
+                Allergen info is provided by the vendor. If you have a severe allergy, confirm with the vendor before pickup.
+              </Text>
+            </View>
+          </View>
+
           {/* Payment Guarantee & Options Banner */}
           <Pressable
             onPress={() => {
@@ -314,6 +410,13 @@ export default function ListingDetailScreen() {
               </View>
               <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
             </Pressable>
+
+            <View style={styles.modalSafetyReminder}>
+              <Feather name="info" size={12} color="#b45309" />
+              <Text style={styles.modalSafetyReminderText}>
+                Severe allergies: please reconfirm ingredients directly with the vendor before pickup.
+              </Text>
+            </View>
 
             <Text style={[styles.choiceSecurityNote, { color: colors.mutedForeground }]}>
               Safe food rescue checkout · Guaranteed portion holds
@@ -519,6 +622,126 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textAlign: 'center',
     marginTop: 6,
+  },
+  allergenDetailCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  allergenDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    gap: 8,
+  },
+  allergenDetailTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  verifiedVendorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  verifiedVendorText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  unverifiedVendorPill: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  unverifiedVendorText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  dietTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  dietTagBadge: {
+    backgroundColor: '#eaf3ec',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#bedbc4',
+  },
+  dietTagBadgeText: {
+    color: '#1e5436',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  allergenNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  allergenNoticeLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  allergenNoticeValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  unverifiedNoticeText: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  safetyDisclaimerBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    backgroundColor: '#fffbeb',
+    padding: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    marginTop: 8,
+  },
+  safetyDisclaimerText: {
+    fontSize: 11,
+    color: '#92400e',
+    lineHeight: 15,
+    flex: 1,
+  },
+  modalSafetyReminder: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fffbeb',
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    marginTop: 10,
+  },
+  modalSafetyReminderText: {
+    fontSize: 10,
+    color: '#92400e',
+    flex: 1,
+    lineHeight: 14,
   },
 });
 

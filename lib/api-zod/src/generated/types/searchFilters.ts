@@ -5,6 +5,7 @@
  * Mumbai food rescue marketplace API
  * OpenAPI spec version: 0.1.0
  */
+import type { AllergenTag } from './allergenTag';
 import type { SearchFiltersCategory } from './searchFiltersCategory';
 import type { SearchFiltersDietItem } from './searchFiltersDietItem';
 import type { SearchFiltersSortBy } from './searchFiltersSortBy';
@@ -13,6 +14,7 @@ export interface SearchFilters {
   keywords?: string[];
   category?: SearchFiltersCategory;
   diet?: SearchFiltersDietItem[];
+  excludeAllergens?: AllergenTag[];
   maxPrice?: number;
   area?: string;
   nearMe?: boolean;

@@ -105,6 +105,45 @@ export function ListingCard({
             </Text>
           </View>
         </View>
+
+        {/* Dietary & Allergen Badges */}
+        <View style={styles.tagBadgeRow}>
+          {listing.allergenInfoConfirmed ? (
+            <>
+              {(listing.dietaryTags || listing.dietTags || []).map((t) => {
+                const label =
+                  t === 'veg' || t === 'vegetarian'
+                    ? '🌱 Veg'
+                    : t === 'vegan'
+                      ? '🌿 Vegan'
+                      : t === 'egg_free' || t === 'eggless'
+                        ? '🥚 Egg-Free'
+                        : t === 'jain'
+                          ? '✨ Jain'
+                          : t === 'halal'
+                            ? '☪️ Halal'
+                            : t;
+                return (
+                  <View key={`card-diet-${t}`} style={styles.dietBadge}>
+                    <Text style={styles.dietBadgeText}>{label}</Text>
+                  </View>
+                );
+              })}
+              {listing.allergens && listing.allergens.length > 0 && (
+                <View style={styles.allergenAlertBadge}>
+                  <Text style={styles.allergenAlertText} numberOfLines={1}>
+                    Contains: {listing.allergens.join(', ')}
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.unconfirmedBadge}>
+              <Text style={styles.unconfirmedBadgeText}>Allergen info not verified</Text>
+            </View>
+          )}
+        </View>
+
         <View style={styles.footer}>
           <Text style={[styles.oldPrice, { color: colors.mutedForeground }]}>{formatRupees(listing.originalPrice)}</Text>
           <Text style={[styles.portions, { color: colors.secondaryForeground }]}>
@@ -170,4 +209,51 @@ const styles = StyleSheet.create({
   },
   oldPrice: { fontSize: 12, textDecorationLine: 'line-through' },
   portions: { fontSize: 11, fontWeight: '700' },
+  tagBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  dietBadge: {
+    backgroundColor: '#eaf3ec',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bedbc4',
+  },
+  dietBadgeText: {
+    color: '#1e5436',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  allergenAlertBadge: {
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    maxWidth: 200,
+  },
+  allergenAlertText: {
+    color: '#b91c1c',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  unconfirmedBadge: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  unconfirmedBadgeText: {
+    color: '#6b7280',
+    fontSize: 10,
+    fontWeight: '500',
+  },
 });

@@ -60,10 +60,12 @@ export async function applyFilters(
   }
 
   // 4. Dietary tags filter (strictly explicit vendor tags via array overlaps/contains)
+  // SAFETY PRINCIPLE: When filtering by dietary tag or allergen exclusion, unconfirmed listings MUST NEVER match.
   if (filters.diet && filters.diet.length > 0) {
+    conditions.push(eq(listingsTable.allergenInfoConfirmed, true));
     const expandedTags: string[] = [];
     for (const d of filters.diet) {
-      if (d === "veg") {
+      if (d === "veg" || (d as string) === "vegetarian") {
         expandedTags.push("veg", "vegetarian", "jain");
       } else if (d === "vegan") {
         expandedTags.push("vegan");
@@ -71,12 +73,21 @@ export async function applyFilters(
         expandedTags.push("egg_free", "eggless", "egg-free");
       } else if (d === "nut_free") {
         expandedTags.push("nut_free", "nut-free");
+      } else if ((d as string) === "jain") {
+        expandedTags.push("jain");
+      } else if ((d as string) === "halal") {
+        expandedTags.push("halal");
       } else {
         expandedTags.push(d);
       }
     }
     // PostgreSQL array overlap: listingsTable.dietary_tags && ARRAY[...]::text[]
     conditions.push(sql`${listingsTable.dietaryTags} && ${expandedTags}::text[]`);
+  }
+
+  // 4b. Allergen exclusion filter: unconfirmed listings must never match
+  if (filters.excludeAllergens && filters.excludeAllergens.length > 0) {
+    conditions.push(eq(listingsTable.allergenInfoConfirmed, true));
   }
 
   // 5. Area resolution
@@ -185,12 +196,28 @@ export async function applyFilters(
       latitude: lat,
       longitude: lng,
       dietaryTags: listing.dietaryTags,
+      allergens: (listing.allergens as any) ?? [],
+      mayContain: (listing.mayContain as any) ?? [],
+      allergenInfoConfirmed: Boolean(listing.allergenInfoConfirmed),
+      allergenConfirmedAt: listing.allergenConfirmedAt ? listing.allergenConfirmedAt.toISOString() : null,
+      allergenConfirmedBy: listing.allergenConfirmedBy ?? null,
+      aiSuggestion: listing.aiSuggestion ?? null,
       expiresAt: listing.expiresAt,
       createdAt: listing.createdAt,
       discountPercent,
       photo: listing.photo === "bakery" ? ("bakery" as const) : ("lunch" as const),
     };
   });
+
+  // Post-query filtering for allergen exclusion, minDiscountPercent, and maxDistanceKm
+  if (filters.excludeAllergens && filters.excludeAllergens.length > 0) {
+    const toExclude = new Set(filters.excludeAllergens as string[]);
+    results = results.filter((r) => {
+      const containsExcluded = (r.allergens || []).some((a: string) => toExclude.has(a));
+      const mayContainExcluded = (r.mayContain || []).some((a: string) => toExclude.has(a));
+      return !containsExcluded && !mayContainExcluded;
+    });
+  }
 
   // Post-query filtering for minDiscountPercent and maxDistanceKm if fallback was used
   if (filters.minDiscountPercent !== undefined) {

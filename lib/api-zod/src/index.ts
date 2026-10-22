@@ -15,6 +15,6 @@ export {
   SendOrderMessageBody as SendMessageBody,
   ParseNaturalSearchResponse as SearchFilters,
   ParseNaturalSearchBody as SearchParseInput,
+  SuggestListingTagsBody as SuggestTagsInput,
+  SuggestListingTagsResponse as SuggestTagsResponse,
 } from "./generated/api";
-
-

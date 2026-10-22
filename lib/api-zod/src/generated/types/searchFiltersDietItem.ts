@@ -14,4 +14,6 @@ export const SearchFiltersDietItem = {
   vegan: 'vegan',
   egg_free: 'egg_free',
   nut_free: 'nut_free',
+  jain: 'jain',
+  halal: 'halal',
 } as const;

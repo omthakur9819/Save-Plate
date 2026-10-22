@@ -6,11 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './allergenTag';
 export * from './createListingInput';
+export * from './createListingInputAiSuggestion';
 export * from './createListingInputCategory';
 export * from './createListingInputDietaryTagsItem';
 export * from './createListingInputPhoto';
 export * from './createOrderInput';
+export * from './dietaryTag';
 export * from './foodListing';
 export * from './foodListingPhoto';
 export * from './getListingsParams';
@@ -31,6 +34,10 @@ export * from './searchFiltersDietItem';
 export * from './searchFiltersSortBy';
 export * from './searchParseInput';
 export * from './sendMessageInput';
+export * from './suggestTagsInput';
+export * from './suggestTagsResponse';
+export * from './tagConfidence';
+export * from './tagSuggestion';
 export * from './vendorAnalytics';
 export * from './vendorAnalyticsPeakOrderHoursItem';
 export * from './vendorAnalyticsPeriod';

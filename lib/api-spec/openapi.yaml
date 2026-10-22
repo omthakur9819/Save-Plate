@@ -129,6 +129,22 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/FoodListing" }
+  /listings/suggest-tags:
+    post:
+      operationId: suggestListingTags
+      tags: [listings]
+      summary: Suggest dietary and allergen tags using vision/text LLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SuggestTagsInput" }
+      responses:
+        "200":
+          description: Suggested dietary and allergen tags
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuggestTagsResponse" }
   /orders:
     get:
       operationId: getOrders
@@ -380,6 +396,28 @@ components:
         createdAt: { type: string, format: date-time }
         discountPercent: { type: integer }
         photo: { type: string, enum: [bakery, lunch] }
+        dietTags:
+          type: array
+          items: { $ref: "#/components/schemas/DietaryTag" }
+          default: []
+        allergens:
+          type: array
+          items: { $ref: "#/components/schemas/AllergenTag" }
+          default: []
+        mayContain:
+          type: array
+          items: { $ref: "#/components/schemas/AllergenTag" }
+          default: []
+        allergenInfoConfirmed:
+          type: boolean
+          default: false
+        allergenConfirmedAt:
+          type: string
+          format: date-time
+          nullable: true
+        allergenConfirmedBy:
+          type: string
+          nullable: true
       required:
         - id
         - vendorId
@@ -401,6 +439,7 @@ components:
         - createdAt
         - discountPercent
         - photo
+        - allergenInfoConfirmed
     CreateListingInput:
       type: object
       properties:
@@ -420,6 +459,25 @@ components:
           items:
             type: string
             enum: [vegan, vegetarian, halal, gluten-free, dairy-free, jain]
+        dietTags:
+          type: array
+          items: { $ref: "#/components/schemas/DietaryTag" }
+          default: []
+        allergens:
+          type: array
+          items: { $ref: "#/components/schemas/AllergenTag" }
+          default: []
+        mayContain:
+          type: array
+          items: { $ref: "#/components/schemas/AllergenTag" }
+          default: []
+        allergenInfoConfirmed:
+          type: boolean
+          default: false
+        aiSuggestion:
+          type: object
+          additionalProperties: true
+          nullable: true
         expiresAt: { type: string, format: date-time }
         photo: { type: string, enum: [bakery, lunch] }
       required:
@@ -579,7 +637,12 @@ components:
           type: array
           items:
             type: string
-            enum: [veg, vegan, egg_free, nut_free]
+            enum: [veg, vegan, egg_free, nut_free, jain, halal]
+          default: []
+        excludeAllergens:
+          type: array
+          items:
+            $ref: "#/components/schemas/AllergenTag"
           default: []
         maxPrice:
           type: number
@@ -597,5 +660,67 @@ components:
           type: string
           enum: [distance, price, ending_soon]
           default: distance
+    DietaryTag:
+      type: string
+      enum: [vegetarian, vegan, egg_free, jain, halal]
+    AllergenTag:
+      type: string
+      enum: [milk, egg, peanuts, tree_nuts, gluten, soy, fish, shellfish, sesame, mustard]
+    TagConfidence:
+      type: string
+      enum: [high, medium, low]
+    TagSuggestion:
+      type: object
+      properties:
+        tag:
+          type: string
+        confidence:
+          $ref: "#/components/schemas/TagConfidence"
+        reason:
+          type: string
+      required:
+        - tag
+        - confidence
+        - reason
+    SuggestTagsInput:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 1000
+        imageUrl:
+          type: string
+      required:
+        - title
+    SuggestTagsResponse:
+      type: object
+      properties:
+        dietary:
+          type: array
+          items:
+            $ref: "#/components/schemas/TagSuggestion"
+        allergens:
+          type: array
+          items:
+            $ref: "#/components/schemas/TagSuggestion"
+        mayContain:
+          type: array
+          items:
+            $ref: "#/components/schemas/TagSuggestion"
+        aiAvailable:
+          type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
+      required:
+        - dietary
+        - allergens
+        - mayContain
+        - aiAvailable
 
 

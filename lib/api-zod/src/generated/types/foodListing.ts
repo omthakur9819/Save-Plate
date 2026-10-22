@@ -5,6 +5,8 @@
  * Mumbai food rescue marketplace API
  * OpenAPI spec version: 0.1.0
  */
+import type { AllergenTag } from './allergenTag';
+import type { DietaryTag } from './dietaryTag';
 import type { FoodListingPhoto } from './foodListingPhoto';
 
 export interface FoodListing {
@@ -28,4 +30,10 @@ export interface FoodListing {
   createdAt: Date;
   discountPercent: number;
   photo: FoodListingPhoto;
+  dietTags?: DietaryTag[];
+  allergens?: AllergenTag[];
+  mayContain?: AllergenTag[];
+  allergenInfoConfirmed: boolean;
+  allergenConfirmedAt?: Date | null;
+  allergenConfirmedBy?: string | null;
 }

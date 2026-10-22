@@ -15,6 +15,7 @@ import {
   OrderStatusBody,
   PushDeviceBody,
   SendMessageBody,
+  SuggestListingTagsBody,
   VerifyPickupBody,
 } from "@workspace/api-zod";
 import {
@@ -30,6 +31,8 @@ import { requireUser } from "../middlewares/requireUser";
 import { HttpError } from "../lib/http-error";
 import { sendPushToUsers } from "../lib/push";
 import { applyFilters } from "../lib/filter-query-builder";
+import { checkSuggestRateLimit, suggestListingTags } from "../lib/llm-allergen-suggester";
+import { checkContradictions } from "../lib/allergen-rule-checker";
 
 const router: IRouter = Router();
 
@@ -84,6 +87,12 @@ function mapListing(
     latitude: point?.latitude ?? null,
     longitude: point?.longitude ?? null,
     dietaryTags: listing.dietaryTags,
+    allergens: (listing.allergens as any) ?? [],
+    mayContain: (listing.mayContain as any) ?? [],
+    allergenInfoConfirmed: Boolean(listing.allergenInfoConfirmed),
+    allergenConfirmedAt: listing.allergenConfirmedAt ? listing.allergenConfirmedAt.toISOString() : null,
+    allergenConfirmedBy: listing.allergenConfirmedBy ?? null,
+    aiSuggestion: listing.aiSuggestion ?? null,
     expiresAt: listing.expiresAt,
     createdAt: listing.createdAt,
     discountPercent: Math.round((1 - listing.price / listing.originalPrice) * 100),
@@ -209,6 +218,21 @@ router.get("/vendor/listings", requireUser, async (_req, res) => {
   res.json(rows.map((listing) => mapListing(listing, vendor)));
 });
 
+router.post("/listings/suggest-tags", requireUser, async (req, res) => {
+  const clientKey = userId(res) || req.ip || "unknown";
+  if (!checkSuggestRateLimit(clientKey)) {
+    throw new HttpError(429, "Too many tag suggestion requests. Please wait a moment.");
+  }
+  const input = SuggestListingTagsBody.parse(req.body);
+  const result = await suggestListingTags({
+    title: input.title,
+    description: input.description,
+    photo: input.imageUrl,
+    clientIp: req.ip,
+  });
+  res.json(result);
+});
+
 router.post("/listings", requireUser, async (req, res) => {
   const input = CreateListingBody.parse(req.body);
   if (input.price >= input.originalPrice) {
@@ -216,6 +240,25 @@ router.post("/listings", requireUser, async (req, res) => {
   }
   if (input.expiresAt <= new Date()) {
     throw new HttpError(400, "The pickup deadline must be in the future.");
+  }
+
+  // SAFETY PRINCIPLE: Vendor must confirm allergen and dietary information
+  if (!input.allergenInfoConfirmed) {
+    throw new HttpError(
+      400,
+      "Vendor must review and confirm allergen and dietary information before listing can be published.",
+    );
+  }
+
+  // Deterministic contradiction check
+  const contradictionResult = checkContradictions(
+    input.name,
+    input.description,
+    (input.dietTags || []) as any,
+    (input.allergens || []) as any,
+  );
+  if (contradictionResult.hasContradiction) {
+    throw new HttpError(400, contradictionResult.blockingReasons.join("; "));
   }
 
   const ownerUserId = userId(res);
@@ -261,6 +304,13 @@ router.post("/listings", requireUser, async (req, res) => {
       latitude: latitudeE6,
       longitude: longitudeE6,
       dietaryTags: input.dietaryTags,
+      dietTags: input.dietTags ?? [],
+      allergens: input.allergens ?? [],
+      mayContain: input.mayContain ?? [],
+      allergenInfoConfirmed: input.allergenInfoConfirmed,
+      allergenConfirmedAt: new Date(),
+      allergenConfirmedBy: ownerUserId,
+      aiSuggestion: input.aiSuggestion ?? null,
       expiresAt: input.expiresAt,
     })
     .returning();

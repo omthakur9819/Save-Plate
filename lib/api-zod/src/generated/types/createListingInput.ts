@@ -5,9 +5,12 @@
  * Mumbai food rescue marketplace API
  * OpenAPI spec version: 0.1.0
  */
+import type { AllergenTag } from './allergenTag';
+import type { CreateListingInputAiSuggestion } from './createListingInputAiSuggestion';
 import type { CreateListingInputCategory } from './createListingInputCategory';
 import type { CreateListingInputDietaryTagsItem } from './createListingInputDietaryTagsItem';
 import type { CreateListingInputPhoto } from './createListingInputPhoto';
+import type { DietaryTag } from './dietaryTag';
 
 export interface CreateListingInput {
   /**
@@ -53,6 +56,11 @@ export interface CreateListingInput {
      */
   longitude: number | null;
   dietaryTags: CreateListingInputDietaryTagsItem[];
+  dietTags?: DietaryTag[];
+  allergens?: AllergenTag[];
+  mayContain?: AllergenTag[];
+  allergenInfoConfirmed?: boolean;
+  aiSuggestion?: CreateListingInputAiSuggestion;
   expiresAt: Date;
   photo: CreateListingInputPhoto;
 }

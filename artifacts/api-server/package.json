@@ -8,6 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test": "node ./build.mjs && node --enable-source-maps --test ./dist/tests.mjs",
+    "test:allergens": "node ./build.mjs && node --enable-source-maps --test ./dist/allergenTests.mjs",
     "eval:model": "node ./build.mjs && node --enable-source-maps ./dist/eval.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

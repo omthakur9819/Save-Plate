@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -58,6 +59,24 @@ export const listingsTable = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    dietTags: text("diet_tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    allergens: text("allergens")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    mayContain: text("may_contain")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    allergenInfoConfirmed: boolean("allergen_info_confirmed")
+      .notNull()
+      .default(false),
+    allergenConfirmedAt: timestamp("allergen_confirmed_at", { withTimezone: true }),
+    allergenConfirmedBy: text("allergen_confirmed_by"),
+    aiSuggestion: jsonb("ai_suggestion"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     expiryReminderSentAt: timestamp("expiry_reminder_sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

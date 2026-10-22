@@ -18,6 +18,7 @@ async function buildAll() {
     entryPoints: {
       index: path.resolve(artifactDir, "src/index.ts"),
       tests: path.resolve(artifactDir, "tests/search-parser.test.ts"),
+      allergenTests: path.resolve(artifactDir, "tests/allergen-tagger.test.ts"),
       eval: path.resolve(artifactDir, "scripts/eval-search-model.ts"),
     },
     platform: "node",

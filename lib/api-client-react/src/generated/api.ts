@@ -34,6 +34,8 @@ import type {
   SearchFilters,
   SearchParseInput,
   SendMessageInput,
+  SuggestTagsInput,
+  SuggestTagsResponse,
   VendorAnalytics,
   VendorFollow,
   VendorOrder,
@@ -480,6 +482,94 @@ export const useCreateListing = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateListingMutationOptions(options));
+    }
+
+export const getSuggestListingTagsUrl = () => {
+
+
+
+
+  return `/api/listings/suggest-tags`
+}
+
+/**
+ * @summary Suggest dietary and allergen tags using vision/text LLM
+ */
+export const suggestListingTags = async (suggestTagsInput: SuggestTagsInput, options?: Parameters<typeof customFetch>[1]): Promise<SuggestTagsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SuggestTagsResponse>(getSuggestListingTagsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(suggestTagsInput)
+  }
+);}
+
+
+
+
+
+export const getSuggestListingTagsMutationKey = () => ['suggestListingTags'] as const;
+
+export const getSuggestListingTagsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestListingTags>>, TError,SuggestListingTagsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof suggestListingTags>>, TError,SuggestListingTagsMutationVariables, TContext> => {
+
+const mutationKey = getSuggestListingTagsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof suggestListingTags>>, SuggestListingTagsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  suggestListingTags(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SuggestListingTagsMutationResult = NonNullable<Awaited<ReturnType<typeof suggestListingTags>>>
+    export type SuggestListingTagsMutationBody = BodyType<SuggestTagsInput>
+    export type SuggestListingTagsMutationError = ErrorType<unknown>
+    export type SuggestListingTagsMutationVariables = {data: BodyType<SuggestTagsInput>}
+
+    /**
+ * @summary Suggest dietary and allergen tags using vision/text LLM
+ */
+export const useSuggestListingTags = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestListingTags>>, TError,SuggestListingTagsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof suggestListingTags>>,
+        TError,
+        SuggestListingTagsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSuggestListingTagsMutationOptions(options));
     }
 
 export const getGetOrdersUrl = () => {
