@@ -13,4 +13,5 @@ export const SearchFiltersSortBy = {
   distance: 'distance',
   price: 'price',
   ending_soon: 'ending_soon',
+  popular: 'popular',
 } as const;

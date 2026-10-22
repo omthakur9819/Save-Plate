@@ -176,7 +176,16 @@ router.get("/listings", async (req, res) => {
       : Array.isArray(rawDietary)
         ? rawDietary.flatMap((value) => String(value).split(",")).filter(Boolean)
         : undefined;
-  const filters = GetListingsQueryParams.parse({ ...req.query, dietary });
+
+  const rawAreas = (req.query as any).areas;
+  const areas =
+    typeof rawAreas === "string"
+      ? rawAreas.split(",").map((a: string) => a.trim()).filter(Boolean)
+      : Array.isArray(rawAreas)
+        ? rawAreas.flatMap((value: any) => String(value).split(",")).map((a: string) => a.trim()).filter(Boolean)
+        : undefined;
+
+  const filters = GetListingsQueryParams.parse({ ...req.query, dietary, areas });
 
   const origin =
     filters.latitude !== undefined && filters.longitude !== undefined
@@ -188,6 +197,7 @@ router.get("/listings", async (req, res) => {
       q: filters.q,
       category: (filters.category?.toLowerCase() as "bakery" | "cafe" | "meals") || undefined,
       diet: (filters.dietary as any) || [],
+      areas,
       maxPrice: filters.maxPrice,
       minDiscountPercent: filters.minDiscountPercent,
       maxDistanceKm: filters.maxDistanceKm,

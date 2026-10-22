@@ -17,6 +17,12 @@ export interface SearchFilters {
   excludeAllergens?: AllergenTag[];
   maxPrice?: number;
   area?: string;
+  areas?: string[];
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  minDiscountPercent?: number;
   nearMe?: boolean;
   maxDistanceKm?: number;
   pickupAfter?: Date;

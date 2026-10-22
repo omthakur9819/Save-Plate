@@ -1,9 +1,10 @@
-import type { z } from "zod";
+import { z } from "zod";
 import type { ParseNaturalSearchResponse } from "./generated/api";
 import type { SearchFilters as SearchFiltersInterface } from "./generated/types";
 
 export * from "./generated/api";
 export * from "./generated/types";
+export { z };
 
 export type SearchFilters = SearchFiltersInterface;
 export type SearchFiltersOutput = z.infer<typeof ParseNaturalSearchResponse>;
@@ -17,4 +18,6 @@ export {
   ParseNaturalSearchBody as SearchParseInput,
   SuggestListingTagsBody as SuggestTagsInput,
   SuggestListingTagsResponse as SuggestTagsResponse,
+  ChatWithAssistantBody as ChatInput,
+  ChatWithAssistantResponse as ChatResponse,
 } from "./generated/api";
