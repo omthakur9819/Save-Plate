@@ -4,6 +4,7 @@ import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   ImageSourcePropType,
@@ -27,6 +28,8 @@ import {
   useMarketplace,
 } from '@/context/MarketplaceContext';
 import { useColors } from '@/hooks/useColors';
+import { getRouteEstimate, RouteEstimate, TravelMode } from '@/lib/aStarRouting';
+
 
 const categories: Array<FoodCategory | 'All'> = ['All', 'Bakery', 'Cafe', 'Meals'];
 
@@ -46,12 +49,35 @@ export default function NearbyMapScreen() {
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
   const [myOffersOnly, setMyOffersOnly] = useState(false);
 
-  const params = useLocalSearchParams<{ spotlight?: string }>();
+  const params = useLocalSearchParams<{ spotlight?: string; routeTo?: string }>();
   const [userCenter, setUserCenter] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [pageScrollEnabled, setPageScrollEnabled] = useState(true);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'located' | 'denied'>('idle');
   const [permission, requestPermission] = Location.useForegroundPermissions();
 
+  // Route State
+  const [routeDestination, setRouteDestination] = useState<FoodListing | null>(null);
+  const [routeEstimate, setRouteEstimate] = useState<RouteEstimate | null>(null);
+  const [isRoutingLoading, setIsRoutingLoading] = useState(false);
+  const [travelMode, setTravelMode] = useState<TravelMode>('driving');
+
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
+
+  // Silently check last known position if permission is already granted
+  useEffect(() => {
+    if (permission?.granted && !userLocation) {
+      Location.getLastKnownPositionAsync({})
+        .then((pos) => {
+          if (pos?.coords) {
+            const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+            setUserLocation(loc);
+            setLocationStatus('located');
+          }
+        })
+        .catch(() => {});
+    }
+  }, [permission?.granted]);
 
   // React to spotlight navigation parameter (e.g. from offer creation in My Food)
   useEffect(() => {
@@ -67,6 +93,17 @@ export default function NearbyMapScreen() {
       }
     }
   }, [params.spotlight, listings]);
+
+  // React to routeTo navigation parameter (e.g. from listing detail page)
+  useEffect(() => {
+    if (params.routeTo) {
+      const match = listings.find((item) => item.id === params.routeTo);
+      if (match) {
+        startRoute(match);
+      }
+    }
+  }, [params.routeTo, listings]);
+
 
   // Extract all distinct neighborhood areas
   const uniqueAreas = useMemo(() => {
@@ -164,7 +201,9 @@ export default function NearbyMapScreen() {
       navigator.geolocation.getCurrentPosition(
         ({ coords }) => {
           setLocationStatus('located');
-          setUserCenter({ latitude: coords.latitude, longitude: coords.longitude });
+          const pos = { latitude: coords.latitude, longitude: coords.longitude };
+          setUserLocation(pos);
+          setUserCenter(pos);
         },
         () => setLocationStatus('denied'),
         { enableHighAccuracy: true, timeout: 10000 },
@@ -180,17 +219,103 @@ export default function NearbyMapScreen() {
     }
     try {
       const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.High,
       });
-      setUserCenter({
+      const pos = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
-      });
+      };
+      setUserLocation(pos);
+      setUserCenter(pos);
       setLocationStatus('located');
       Haptics.selectionAsync();
     } catch {
       Alert.alert('Could not get your location', 'Check your device location settings and try again.');
     }
+  };
+
+  const startRoute = async (item: FoodListing, modeOverride?: TravelMode) => {
+    const activeMode = modeOverride || travelMode;
+    setRouteDestination(item);
+    setSelectedListingId(item.id);
+    setUserCenter({ latitude: item.latitude, longitude: item.longitude });
+    Haptics.selectionAsync();
+
+    let loc = userLocation;
+    if (!loc) {
+      setIsRoutingLoading(true);
+      try {
+        if (Platform.OS === 'web') {
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              async ({ coords }) => {
+                const current = { latitude: coords.latitude, longitude: coords.longitude };
+                setUserLocation(current);
+                setLocationStatus('located');
+                const est = await getRouteEstimate(current, { latitude: item.latitude, longitude: item.longitude }, activeMode);
+                setRouteEstimate(est);
+                setIsRoutingLoading(false);
+              },
+              () => setIsRoutingLoading(false),
+              { enableHighAccuracy: true, timeout: 8000 }
+            );
+            return;
+          }
+        } else {
+          if (!permission?.granted) {
+            const res = await requestPermission();
+            if (!res.granted) {
+              setLocationStatus('denied');
+              setIsRoutingLoading(false);
+              Alert.alert('Location required', 'Please enable location permissions to calculate the route.');
+              return;
+            }
+          }
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+          setUserLocation(loc);
+          setLocationStatus('located');
+        }
+      } catch {
+        setIsRoutingLoading(false);
+        Alert.alert('GPS Unavailable', 'Check device location settings to get directions.');
+        return;
+      }
+    }
+
+    if (loc) {
+      setIsRoutingLoading(true);
+      try {
+        const est = await getRouteEstimate(loc, { latitude: item.latitude, longitude: item.longitude }, activeMode);
+        setRouteEstimate(est);
+      } finally {
+        setIsRoutingLoading(false);
+      }
+    }
+  };
+
+  const handleChangeTravelMode = async (newMode: TravelMode) => {
+    setTravelMode(newMode);
+    if (routeDestination && userLocation) {
+      setIsRoutingLoading(true);
+      try {
+        const est = await getRouteEstimate(
+          userLocation,
+          { latitude: routeDestination.latitude, longitude: routeDestination.longitude },
+          newMode
+        );
+        setRouteEstimate(est);
+      } finally {
+        setIsRoutingLoading(false);
+      }
+    }
+  };
+
+  const clearRoute = () => {
+    setRouteDestination(null);
+    setRouteEstimate(null);
+    setIsRoutingLoading(false);
+    Haptics.selectionAsync();
   };
 
   const openSettings = async () => {
@@ -204,6 +329,8 @@ export default function NearbyMapScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
+        scrollEnabled={pageScrollEnabled}
+        nestedScrollEnabled={true}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
@@ -388,14 +515,34 @@ export default function NearbyMapScreen() {
         ) : null}
 
         {/* Map View */}
-        <NearbyMap
-          items={available}
-          onMarkerPress={openListing}
-          onSelectMarker={handleSelectMarker}
-          selectedId={selectedListingId}
-          center={userCenter}
-          showUserLocation={!!permission?.granted}
-        />
+        <View
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderGrant={() => setPageScrollEnabled(false)}
+          onResponderRelease={() => setPageScrollEnabled(true)}
+          onResponderTerminate={() => setPageScrollEnabled(true)}
+          onTouchStart={() => setPageScrollEnabled(false)}
+          onTouchEnd={() => setPageScrollEnabled(true)}
+          onTouchCancel={() => setPageScrollEnabled(true)}
+        >
+          <NearbyMap
+            items={available}
+            onMarkerPress={openListing}
+            onSelectMarker={handleSelectMarker}
+            selectedId={selectedListingId}
+            center={userCenter}
+            userLocation={userLocation}
+            showUserLocation={!!permission?.granted}
+            onLocateMe={locateMe}
+            routeDestination={routeDestination}
+            routeEstimate={routeEstimate}
+            isRoutingLoading={isRoutingLoading}
+            travelMode={travelMode}
+            onChangeTravelMode={handleChangeTravelMode}
+            onStartRoute={startRoute}
+            onClearRoute={clearRoute}
+          />
+        </View>
 
         {/* Map Hint / Legend */}
         <View style={styles.mapHint}>
@@ -465,17 +612,45 @@ export default function NearbyMapScreen() {
                   {selectedListing.area}
                 </Text>
               </View>
-              <Pressable
-                onPress={() => openListing(selectedListing)}
-                style={[styles.spotlightButton, { backgroundColor: colors.primary }]}
-                accessibilityRole="button"
-                accessibilityLabel={`View ${selectedListing.name}`}
-              >
-                <Text style={[styles.spotlightButtonText, { color: colors.primaryForeground }]}>
-                  View & Reserve
-                </Text>
-                <Feather name="arrow-right" size={13} color={colors.primaryForeground} />
-              </Pressable>
+              <View style={styles.spotlightActionsRow}>
+                <Pressable
+                  onPress={() => startRoute(selectedListing)}
+                  style={[
+                    styles.spotlightRouteBtn,
+                    routeDestination?.id === selectedListing.id && styles.spotlightRouteBtnActive,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Get quick route to ${selectedListing.vendor}`}
+                >
+                  <Feather
+                    name="navigation"
+                    size={12}
+                    color={routeDestination?.id === selectedListing.id ? '#ffffff' : '#2563eb'}
+                  />
+                  <Text
+                    style={[
+                      styles.spotlightRouteBtnText,
+                      routeDestination?.id === selectedListing.id && styles.spotlightRouteBtnTextActive,
+                    ]}
+                  >
+                    {routeDestination?.id === selectedListing.id && routeEstimate
+                      ? `${routeEstimate.etaText} (${routeEstimate.distanceText}) · ${routeEstimate.method === 'osrm-realtime' ? 'OSRM' : 'A*'}`
+                      : 'Quick Route'}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => openListing(selectedListing)}
+                  style={[styles.spotlightButton, { backgroundColor: colors.primary }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${selectedListing.name}`}
+                >
+                  <Text style={[styles.spotlightButtonText, { color: colors.primaryForeground }]}>
+                    View & Reserve
+                  </Text>
+                  <Feather name="arrow-right" size={13} color={colors.primaryForeground} />
+                </Pressable>
+              </View>
             </View>
           </View>
         )}
@@ -674,6 +849,36 @@ const styles = StyleSheet.create({
   spotlightArea: {
     fontSize: 11,
   },
+  spotlightActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  spotlightRouteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  spotlightRouteBtnActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#1d4ed8',
+  },
+  spotlightRouteBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1d4ed8',
+  },
+  spotlightRouteBtnTextActive: {
+    color: '#ffffff',
+  },
   spotlightButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -682,7 +887,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 10,
-    marginTop: 6,
     alignSelf: 'flex-start',
   },
   spotlightButtonText: {

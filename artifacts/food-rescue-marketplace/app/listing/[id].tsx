@@ -6,6 +6,7 @@ import {
   Alert,
   Image,
   ImageSourcePropType,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -330,15 +331,67 @@ export default function ListingDetailScreen() {
               <Text style={[styles.pickupTime, { color: colors.foreground }]}>{listing.pickupWindow}</Text>
             </View>
           </View>
-          <View style={styles.placeLine}>
-            <View style={[styles.placeIcon, { backgroundColor: colors.secondary }]}>
-              <Feather name="map-pin" size={15} color={colors.secondaryForeground} />
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push({
+                pathname: '/(tabs)/map',
+                params: { spotlight: listing.id, routeTo: listing.id },
+              });
+            }}
+            style={({ pressed }) => [styles.placeLine, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${listing.vendor} on map`}
+          >
+            <View style={[styles.placeIcon, { backgroundColor: '#eff6ff' }]}>
+              <Feather name="navigation" size={16} color="#2563eb" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.placeName, { color: colors.foreground }]}>{listing.area}</Text>
-              <Text style={[styles.placeMeta, { color: colors.mutedForeground }]}>{listing.distance} away · Online & counter payment</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.placeName, { color: colors.foreground }]}>{listing.area}</Text>
+                <View style={styles.quickRouteBadge}>
+                  <Text style={styles.quickRouteBadgeText}>VIEW ON MAP</Text>
+                </View>
+              </View>
+              <Text style={[styles.placeMeta, { color: colors.mutedForeground }]}>
+                {listing.distance} away · Tap for live GPS route & Google Maps
+              </Text>
             </View>
-            <Feather name="chevron-right" size={17} color={colors.mutedForeground} />
+            <Feather name="chevron-right" size={17} color="#2563eb" />
+          </Pressable>
+
+          <View style={styles.mapActionsContainer}>
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push({
+                  pathname: '/(tabs)/map',
+                  params: { spotlight: listing.id, routeTo: listing.id },
+                });
+              }}
+              style={styles.inAppMapBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Explore route in map tab"
+            >
+              <Feather name="map" size={12} color="#2563eb" />
+              <Text style={styles.inAppMapBtnText}>Explore in App Map</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                const url = `https://www.google.com/maps/search/?api=1&query=${listing.latitude},${listing.longitude}`;
+                Linking.openURL(url).catch(() => {
+                  Alert.alert('Cannot open map', 'Could not open Google Maps app.');
+                });
+              }}
+              style={styles.externalMapBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Open in Google Maps App"
+            >
+              <Feather name="external-link" size={12} color="#15803d" />
+              <Text style={styles.externalMapBtnText}>Open Google Maps</Text>
+            </Pressable>
           </View>
 
           <View style={[styles.wasteNote, { borderColor: colors.border }]}>
@@ -541,10 +594,63 @@ const styles = StyleSheet.create({
   pickupIcon: { width: 36, height: 36, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   pickupLabel: { fontSize: 8, letterSpacing: 1, fontWeight: '800' },
   pickupTime: { fontSize: 12, fontWeight: '700', marginTop: 4 },
-  placeLine: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 16 },
+  placeLine: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 14 },
   placeIcon: { width: 35, height: 35, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   placeName: { fontSize: 12, fontWeight: '700' },
   placeMeta: { fontSize: 10, marginTop: 4 },
+  quickRouteBadge: {
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  quickRouteBadgeText: {
+    color: '#1d4ed8',
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  mapActionsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  inAppMapBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+  },
+  inAppMapBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
+  externalMapBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+  },
+  externalMapBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803d',
+  },
   wasteNote: { borderWidth: 1, borderRadius: 15, padding: 12, flexDirection: 'row', gap: 9, alignItems: 'center' },
   wasteText: { flex: 1, fontSize: 10, lineHeight: 15 },
   bottomBar: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopWidth: 1, paddingTop: 12, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 15, zIndex: 50 },
