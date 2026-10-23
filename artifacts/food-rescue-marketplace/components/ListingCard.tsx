@@ -22,6 +22,7 @@ interface ListingCardProps {
   onPress: () => void;
   onFavorite: () => void;
   horizontal?: boolean;
+  warningNotice?: string;
 }
 
 export function ListingCard({
@@ -30,6 +31,7 @@ export function ListingCard({
   onPress,
   onFavorite,
   horizontal = false,
+  warningNotice,
 }: ListingCardProps) {
   const colors = useColors();
   const discount = Math.round(
@@ -133,6 +135,13 @@ export function ListingCard({
                 <View style={styles.allergenAlertBadge}>
                   <Text style={styles.allergenAlertText} numberOfLines={1}>
                     Contains: {listing.allergens.join(', ')}
+                  </Text>
+                </View>
+              )}
+              {warningNotice && (
+                <View style={styles.mayContainAlertBadge}>
+                  <Text style={styles.mayContainAlertText} numberOfLines={1}>
+                    ⚠️ {warningNotice}
                   </Text>
                 </View>
               )}
@@ -240,6 +249,20 @@ const styles = StyleSheet.create({
   },
   allergenAlertText: {
     color: '#b91c1c',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  mayContainAlertBadge: {
+    backgroundColor: '#fffbeb',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    maxWidth: 200,
+  },
+  mayContainAlertText: {
+    color: '#b45309',
     fontSize: 10,
     fontWeight: '600',
   },

@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ListingCard } from '@/components/ListingCard';
 import { RestaurantCard } from '@/components/RestaurantCard';
+import { AIChatSheet } from '@/components/AIChatSheet';
 import { AppMode, FoodCategory, FoodListing, useMarketplace } from '@/context/MarketplaceContext';
 import { useColors } from '@/hooks/useColors';
 import { useParseNaturalSearch, type SearchFilters } from '@workspace/api-client-react';
@@ -45,6 +46,7 @@ export default function ExploreScreen() {
   const [category, setCategory] = useState<FoodCategory | 'All'>('All');
   const [search, setSearch] = useState('');
   const [savedOnly, setSavedOnly] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Natural-Language Filter State
   const [activeFilters, setActiveFilters] = useState<SearchFilters | null>(null);
@@ -191,19 +193,34 @@ export default function ExploreScreen() {
             if (!listing.allergenInfoConfirmed) return false;
 
             const containsAllergens = (listing.allergens || []).map((a) => a.toLowerCase());
-            const tracesAllergens = (listing.mayContain || []).map((a) => a.toLowerCase());
-
             const hasExcludedAllergen = filters.excludeAllergens.some((ex) => {
               const exLower = ex.toLowerCase();
-              return containsAllergens.includes(exLower) || tracesAllergens.includes(exLower);
+              return containsAllergens.includes(exLower);
             });
             if (hasExcludedAllergen) return false;
           }
 
-          // Area
-          if (filters.area) {
-            const cleanArea = filters.area.toLowerCase();
-            if (!listing.area.toLowerCase().includes(cleanArea)) return false;
+          // Min discount percentage filter
+          if (filters.minDiscountPercent !== undefined && filters.minDiscountPercent > 0) {
+            const discountPct = Math.round(
+              (1 - listing.price / listing.originalPrice) * 100,
+            );
+            if (discountPct < filters.minDiscountPercent) return false;
+          }
+
+          // Area (multi-area or single area)
+          const targetAreas =
+            filters.areas && filters.areas.length > 0
+              ? filters.areas
+              : filters.area
+                ? [filters.area]
+                : [];
+          if (targetAreas.length > 0) {
+            const cleanArea = listing.area.toLowerCase();
+            const matchesAny = targetAreas.some((a) =>
+              cleanArea.includes(a.toLowerCase()),
+            );
+            if (!matchesAny) return false;
           }
 
           // Keywords
@@ -230,6 +247,9 @@ export default function ExploreScreen() {
     if (sortBy === 'price') {
       return copy.sort((a, b) => a.price - b.price);
     }
+    if (sortBy === 'popular') {
+      return copy.sort((a, b) => a.quantity - b.quantity);
+    }
     if (sortBy === 'ending_soon') {
       return copy;
     }
@@ -250,6 +270,18 @@ export default function ExploreScreen() {
     // Relax the strictest filter when 0 direct matches
     let relaxed = { ...activeFilters };
     let message = '';
+
+    if (relaxed.minDiscountPercent !== undefined) {
+      const oldDiscount = relaxed.minDiscountPercent;
+      delete relaxed.minDiscountPercent;
+      const trial = filterListings(listings, relaxed);
+      if (trial.length > 0) {
+        return {
+          matchedListings: sortListings(trial, relaxed.sortBy),
+          relaxedMessage: `No results with ≥${oldDiscount}% off. Showing all discounted rescue meals.`,
+        };
+      }
+    }
 
     if (relaxed.maxPrice !== undefined) {
       const oldPrice = relaxed.maxPrice;
@@ -340,11 +372,37 @@ export default function ExploreScreen() {
       });
     }
 
-    if (activeFilters.area) {
+    if (activeFilters.areas && activeFilters.areas.length > 0) {
+      for (const a of activeFilters.areas) {
+        chips.push({
+          id: `area-${a}`,
+          label: `📍 ${a}`,
+          onRemove: () =>
+            setActiveFilters((prev) => {
+              if (!prev) return null;
+              const nextAreas = (prev.areas || []).filter((item) => item !== a);
+              return {
+                ...prev,
+                areas: nextAreas,
+                area: nextAreas.length > 0 ? nextAreas[0] : undefined,
+              };
+            }),
+        });
+      }
+    } else if (activeFilters.area) {
       chips.push({
         id: 'area',
-        label: `Area: ${activeFilters.area}`,
+        label: `📍 Area: ${activeFilters.area}`,
         onRemove: () => setActiveFilters((prev) => (prev ? { ...prev, area: undefined } : null)),
+      });
+    }
+
+    if (activeFilters.minDiscountPercent) {
+      chips.push({
+        id: 'minDiscountPercent',
+        label: `≥${activeFilters.minDiscountPercent}% off`,
+        onRemove: () =>
+          setActiveFilters((prev) => (prev ? { ...prev, minDiscountPercent: undefined } : null)),
       });
     }
 
@@ -375,7 +433,7 @@ export default function ExploreScreen() {
 
     if (activeFilters.excludeAllergens && activeFilters.excludeAllergens.length > 0) {
       for (const ex of activeFilters.excludeAllergens) {
-        const title = `No ${ex.charAt(0).toUpperCase() + ex.slice(1)}`;
+        const title = `🚫 No ${ex.charAt(0).toUpperCase() + ex.slice(1).replace('_', ' ')}`;
         chips.push({
           id: `exclude-${ex}`,
           label: title,
@@ -409,9 +467,15 @@ export default function ExploreScreen() {
     }
 
     if (activeFilters.sortBy && activeFilters.sortBy !== 'distance') {
+      const sortLabel =
+        activeFilters.sortBy === 'popular'
+          ? '🔥 Popular first'
+          : activeFilters.sortBy === 'price'
+            ? 'Lowest Price'
+            : 'Ending Soon';
       chips.push({
         id: 'sort',
-        label: activeFilters.sortBy === 'price' ? 'Lowest Price' : 'Ending Soon',
+        label: sortLabel,
         onRemove: () => setActiveFilters((prev) => (prev ? { ...prev, sortBy: 'distance' } : null)),
       });
     }
@@ -858,18 +922,30 @@ export default function ExploreScreen() {
             </View>
           )
         ) : matchedListings.length > 0 ? (
-          matchedListings.map((listing) => (
-            <ListingCard
-              key={listing.id}
-              listing={listing}
-              favorite={favorites.includes(listing.id)}
-              onPress={() => openListing(listing.id)}
-              onFavorite={() => {
-                toggleFavorite(listing.id);
-                Haptics.selectionAsync?.();
-              }}
-            />
-          ))
+          matchedListings.map((listing) => {
+            const traceMatches = activeFilters?.excludeAllergens
+              ? (listing.mayContain || []).filter((a) =>
+                  activeFilters.excludeAllergens!.map((e) => e.toLowerCase()).includes(a.toLowerCase()),
+                )
+              : [];
+            const warningNotice =
+              traceMatches.length > 0
+                ? `May contain trace ${traceMatches.join(', ')}`
+                : undefined;
+            return (
+              <ListingCard
+                key={listing.id}
+                listing={listing}
+                favorite={favorites.includes(listing.id)}
+                warningNotice={warningNotice}
+                onPress={() => openListing(listing.id)}
+                onFavorite={() => {
+                  toggleFavorite(listing.id);
+                  Haptics.selectionAsync?.();
+                }}
+              />
+            );
+          })
         ) : (
           <View style={[styles.empty, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name={savedOnly ? 'heart' : 'search'} size={25} color={colors.primary} />
@@ -894,12 +970,79 @@ export default function ExploreScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Floating SaveBot AI Assistant Action Button */}
+      <View
+        style={[
+          styles.fabContainer,
+          { bottom: Platform.OS === 'web' ? 34 : Math.max(insets.bottom, 12) + 72 },
+        ]}
+      >
+        <View style={[styles.fabAiBadge, { backgroundColor: '#1e5436' }]}>
+          <Text style={styles.fabAiBadgeText}>AI</Text>
+        </View>
+        <Pressable
+          onPress={() => {
+            setChatOpen(true);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          }}
+          style={[
+            styles.fabButton,
+            { backgroundColor: colors.primary, shadowColor: '#000' },
+          ]}
+          accessibilityLabel="Open SaveBot AI Assistant"
+          accessibilityRole="button"
+          testID="open-savebot-chat"
+        >
+          <Feather name="message-circle" size={24} color="#ffffff" />
+        </Pressable>
+      </View>
+
+      {/* SaveBot AI Chat Bottom Sheet */}
+      <AIChatSheet
+        visible={chatOpen}
+        onClose={() => setChatOpen(false)}
+        listings={listings}
+        userArea={activeFilters?.area}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  fabContainer: {
+    position: 'absolute',
+    right: 20,
+    alignItems: 'center',
+    zIndex: 99,
+  },
+  fabAiBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+    marginBottom: -6,
+    zIndex: 100,
+    borderWidth: 1,
+    borderColor: '#ffffff',
+  },
+  fabAiBadgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  fabButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
   content: { paddingHorizontal: 20 },
   topLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   eyebrow: { fontSize: 9, fontWeight: '800', letterSpacing: 1.6 },

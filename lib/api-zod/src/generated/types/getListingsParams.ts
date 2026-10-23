@@ -23,6 +23,7 @@ maxPrice?: number;
  * @maximum 100
  */
 minDiscountPercent?: number;
+areas?: string[];
 /**
  * @minimum 0.1
  */

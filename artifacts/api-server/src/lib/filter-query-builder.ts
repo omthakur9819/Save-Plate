@@ -88,23 +88,48 @@ export async function applyFilters(
   // 4b. Allergen exclusion filter: unconfirmed listings must never match
   if (filters.excludeAllergens && filters.excludeAllergens.length > 0) {
     conditions.push(eq(listingsTable.allergenInfoConfirmed, true));
+    const excluded = filters.excludeAllergens as string[];
+    conditions.push(sql`NOT (${listingsTable.allergens} && ${excluded}::text[])`);
+    conditions.push(sql`NOT (${listingsTable.mayContain} && ${excluded}::text[])`);
   }
 
-  // 5. Area resolution
+  // 5. Area resolution (supports multi-area or single area)
   let resolvedAreaCoords: UserLocation | null = null;
-  if (filters.area) {
-    const resolved = resolveMumbaiArea(filters.area);
-    if (resolved) {
-      resolvedAreaCoords = { latitude: resolved.latitude, longitude: resolved.longitude };
-      conditions.push(
-        or(
-          ilike(listingsTable.area, `%${resolved.canonicalName}%`),
-          ...resolved.aliases.slice(0, 3).map((alias) => ilike(listingsTable.area, `%${alias}%`)),
-        )!,
-      );
-    } else {
-      conditions.push(ilike(listingsTable.area, `%${filters.area}%`));
+  const targetAreas =
+    filters.areas && filters.areas.length > 0
+      ? filters.areas
+      : filters.area
+        ? [filters.area]
+        : [];
+
+  if (targetAreas.length > 0) {
+    const areaConds: SQL[] = [];
+    for (const areaStr of targetAreas) {
+      const resolved = resolveMumbaiArea(areaStr);
+      if (resolved) {
+        if (!resolvedAreaCoords) {
+          resolvedAreaCoords = { latitude: resolved.latitude, longitude: resolved.longitude };
+        }
+        areaConds.push(
+          or(
+            ilike(listingsTable.area, `%${resolved.canonicalName}%`),
+            ...resolved.aliases.slice(0, 3).map((alias) => ilike(listingsTable.area, `%${alias}%`)),
+          )!,
+        );
+      } else {
+        areaConds.push(ilike(listingsTable.area, `%${areaStr}%`));
+      }
     }
+    if (areaConds.length > 0) {
+      conditions.push(or(...areaConds)!);
+    }
+  }
+
+  // 5b. Min Discount Percent filter
+  if (filters.minDiscountPercent !== undefined && filters.minDiscountPercent > 0) {
+    conditions.push(
+      sql`ROUND((1.0 - (${listingsTable.price}::numeric / NULLIF(${listingsTable.originalPrice}, 0)::numeric)) * 100) >= ${filters.minDiscountPercent}`,
+    );
   }
 
   // 6. Keywords filter
@@ -233,6 +258,8 @@ export async function applyFilters(
     results.sort((a, b) => a.price - b.price);
   } else if (sortBy === "ending_soon") {
     results.sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime());
+  } else if (sortBy === "popular") {
+    results.sort((a, b) => a.quantity - b.quantity);
   } else {
     // distance
     if (origin) {

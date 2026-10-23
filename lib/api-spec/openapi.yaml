@@ -41,6 +41,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchFilters"
+  /search/chat:
+    post:
+      operationId: chatWithAssistant
+      tags: [search]
+      summary: Multi-turn AI food rescue chat assistant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatInput"
+      responses:
+        "200":
+          description: AI assistant reply with matched listing IDs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
   /healthz:
     get:
       operationId: healthCheck
@@ -92,6 +110,13 @@ paths:
         - in: query
           name: minDiscountPercent
           schema: { type: integer, minimum: 0, maximum: 100 }
+        - in: query
+          name: areas
+          style: form
+          explode: false
+          schema:
+            type: array
+            items: { type: string }
         - in: query
           name: maxDistanceKm
           schema: { type: number, minimum: 0.1 }
@@ -648,6 +673,15 @@ components:
           type: number
         area:
           type: string
+        areas:
+          type: array
+          items:
+            type: string
+          default: []
+        minDiscountPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
         nearMe:
           type: boolean
           default: false
@@ -658,7 +692,7 @@ components:
           format: date-time
         sortBy:
           type: string
-          enum: [distance, price, ending_soon]
+          enum: [distance, price, ending_soon, popular]
           default: distance
     DietaryTag:
       type: string
@@ -722,5 +756,52 @@ components:
         - allergens
         - mayContain
         - aiAvailable
+    ChatMessage:
+      type: object
+      properties:
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string, maxLength: 500 }
+      required: [role, content]
+    ActiveListingSummary:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        vendor: { type: string }
+        category: { type: string }
+        price: { type: number }
+        originalPrice: { type: number }
+        area: { type: string }
+        pickupWindow: { type: string }
+        quantity: { type: number }
+        dietaryTags: { type: array, items: { type: string } }
+        allergens: { type: array, items: { type: string } }
+        description: { type: string }
+      required: [id, name, vendor, category, price, originalPrice, area, pickupWindow, quantity, dietaryTags, allergens, description]
+    ChatInput:
+      type: object
+      properties:
+        messages:
+          type: array
+          maxItems: 6
+          items: { $ref: "#/components/schemas/ChatMessage" }
+        listings:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/ActiveListingSummary" }
+        now: { type: string, format: date-time }
+        timezone: { type: string }
+        userArea: { type: string }
+      required: [messages, listings, now, timezone]
+    ChatResponse:
+      type: object
+      properties:
+        reply: { type: string }
+        listingIds:
+          type: array
+          items: { type: string }
+        intent: { type: string, enum: [search, info, fallback] }
+      required: [reply, listingIds, intent]
+
 
 

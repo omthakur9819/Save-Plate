@@ -24,6 +24,10 @@ export const ParseNaturalSearchBody = zod.object({
 export const parseNaturalSearchResponseKeywordsDefault = [];
 export const parseNaturalSearchResponseDietDefault = [];
 export const parseNaturalSearchResponseExcludeAllergensDefault = [];
+export const parseNaturalSearchResponseAreasDefault = [];
+export const parseNaturalSearchResponseMinDiscountPercentMin = 0;
+export const parseNaturalSearchResponseMinDiscountPercentMax = 100;
+
 export const parseNaturalSearchResponseNearMeDefault = false;
 export const parseNaturalSearchResponseSortByDefault = `distance`;
 
@@ -34,10 +38,54 @@ export const ParseNaturalSearchResponse = zod.object({
   "excludeAllergens": zod.array(zod.enum(['milk', 'egg', 'peanuts', 'tree_nuts', 'gluten', 'soy', 'fish', 'shellfish', 'sesame', 'mustard'])).default(parseNaturalSearchResponseExcludeAllergensDefault),
   "maxPrice": zod.number().optional(),
   "area": zod.string().optional(),
+  "areas": zod.array(zod.string()).default(parseNaturalSearchResponseAreasDefault),
+  "minDiscountPercent": zod.number().int().min(parseNaturalSearchResponseMinDiscountPercentMin).max(parseNaturalSearchResponseMinDiscountPercentMax).optional(),
   "nearMe": zod.boolean().default(parseNaturalSearchResponseNearMeDefault),
   "maxDistanceKm": zod.number().optional(),
   "pickupAfter": zod.coerce.date().optional(),
-  "sortBy": zod.enum(['distance', 'price', 'ending_soon']).default(parseNaturalSearchResponseSortByDefault)
+  "sortBy": zod.enum(['distance', 'price', 'ending_soon', 'popular']).default(parseNaturalSearchResponseSortByDefault)
+})
+
+
+/**
+ * @summary Multi-turn AI food rescue chat assistant
+ */
+export const chatWithAssistantBodyMessagesItemContentMax = 500;
+
+export const chatWithAssistantBodyMessagesMax = 6;
+
+export const chatWithAssistantBodyListingsMax = 50;
+
+
+
+export const ChatWithAssistantBody = zod.object({
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().max(chatWithAssistantBodyMessagesItemContentMax)
+})).max(chatWithAssistantBodyMessagesMax),
+  "listings": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "vendor": zod.string(),
+  "category": zod.string(),
+  "price": zod.number(),
+  "originalPrice": zod.number(),
+  "area": zod.string(),
+  "pickupWindow": zod.string(),
+  "quantity": zod.number(),
+  "dietaryTags": zod.array(zod.string()),
+  "allergens": zod.array(zod.string()),
+  "description": zod.string()
+})).max(chatWithAssistantBodyListingsMax),
+  "now": zod.coerce.date(),
+  "timezone": zod.string(),
+  "userArea": zod.string().optional()
+})
+
+export const ChatWithAssistantResponse = zod.object({
+  "reply": zod.string(),
+  "listingIds": zod.array(zod.string()),
+  "intent": zod.enum(['search', 'info', 'fallback'])
 })
 
 
@@ -81,6 +129,7 @@ export const GetListingsQueryParams = zod.object({
   "dietary": zod.array(zod.coerce.string()).optional().describe('Match any supplied dietary tag'),
   "maxPrice": zod.coerce.number().int().min(1).optional(),
   "minDiscountPercent": zod.coerce.number().int().min(getListingsQueryMinDiscountPercentMin).max(getListingsQueryMinDiscountPercentMax).optional(),
+  "areas": zod.array(zod.coerce.string()).optional(),
   "maxDistanceKm": zod.coerce.number().min(getListingsQueryMaxDistanceKmMin).optional(),
   "latitude": zod.coerce.number().min(getListingsQueryLatitudeMin).max(getListingsQueryLatitudeMax).optional(),
   "longitude": zod.coerce.number().min(getListingsQueryLongitudeMin).max(getListingsQueryLongitudeMax).optional(),

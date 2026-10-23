@@ -6,7 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './activeListingSummary';
 export * from './allergenTag';
+export * from './chatInput';
+export * from './chatMessage';
+export * from './chatMessageRole';
+export * from './chatResponse';
+export * from './chatResponseIntent';
 export * from './createListingInput';
 export * from './createListingInputAiSuggestion';
 export * from './createListingInputCategory';

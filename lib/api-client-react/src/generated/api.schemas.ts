@@ -327,6 +327,7 @@ export const SearchFiltersSortBy = {
   distance: 'distance',
   price: 'price',
   ending_soon: 'ending_soon',
+  popular: 'popular',
 } as const;
 
 export interface SearchFilters {
@@ -336,6 +337,12 @@ export interface SearchFilters {
   excludeAllergens?: AllergenTag[];
   maxPrice?: number;
   area?: string;
+  areas?: string[];
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  minDiscountPercent?: number;
   nearMe?: boolean;
   maxDistanceKm?: number;
   pickupAfter?: string;
@@ -376,6 +383,60 @@ export interface SuggestTagsResponse {
   warnings?: string[];
 }
 
+export type ChatMessageRole = typeof ChatMessageRole[keyof typeof ChatMessageRole];
+
+
+export const ChatMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export interface ChatMessage {
+  role: ChatMessageRole;
+  /** @maxLength 500 */
+  content: string;
+}
+
+export interface ActiveListingSummary {
+  id: string;
+  name: string;
+  vendor: string;
+  category: string;
+  price: number;
+  originalPrice: number;
+  area: string;
+  pickupWindow: string;
+  quantity: number;
+  dietaryTags: string[];
+  allergens: string[];
+  description: string;
+}
+
+export interface ChatInput {
+  /** @maxItems 6 */
+  messages: ChatMessage[];
+  /** @maxItems 50 */
+  listings: ActiveListingSummary[];
+  now: string;
+  timezone: string;
+  userArea?: string;
+}
+
+export type ChatResponseIntent = typeof ChatResponseIntent[keyof typeof ChatResponseIntent];
+
+
+export const ChatResponseIntent = {
+  search: 'search',
+  info: 'info',
+  fallback: 'fallback',
+} as const;
+
+export interface ChatResponse {
+  reply: string;
+  listingIds: string[];
+  intent: ChatResponseIntent;
+}
+
 export type GetListingsParams = {
 q?: string;
 category?: string;
@@ -392,6 +453,7 @@ maxPrice?: number;
  * @maximum 100
  */
 minDiscountPercent?: number;
+areas?: string[];
 /**
  * @minimum 0.1
  */
