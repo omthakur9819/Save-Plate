@@ -159,16 +159,16 @@ export async function applyFilters(
     (filters.nearMe && userLocation) || userLocation || resolvedAreaCoords || null;
 
   // 8. Distance filter via PostGIS ST_DWithin if origin & maxDistanceKm are set
+  let distanceCondition: SQL | null = null;
   if (origin && filters.maxDistanceKm !== undefined && filters.maxDistanceKm > 0) {
     const maxMeters = filters.maxDistanceKm * 1000;
     try {
-      conditions.push(
-        sql`ST_DWithin(
-          ST_SetSRID(ST_MakePoint(${listingsTable.longitude} / 1000000.0, ${listingsTable.latitude} / 1000000.0), 4326)::geography,
-          ST_SetSRID(ST_MakePoint(${origin.longitude}, ${origin.latitude}), 4326)::geography,
-          ${maxMeters}
-        )`,
-      );
+      distanceCondition = sql`ST_DWithin(
+        ST_SetSRID(ST_MakePoint(${listingsTable.longitude} / 1000000.0, ${listingsTable.latitude} / 1000000.0), 4326)::geography,
+        ST_SetSRID(ST_MakePoint(${origin.longitude}, ${origin.latitude}), 4326)::geography,
+        ${maxMeters}
+      )`;
+      conditions.push(distanceCondition);
     } catch {
       // PostGIS fallback will be applied during memory mapping
     }
@@ -185,10 +185,11 @@ export async function applyFilters(
   try {
     rows = await query;
   } catch (dbErr) {
-    // If PostGIS function is unavailable in a bare Postgres setup without postgis, re-run without ST_DWithin
-    const safeConditions = conditions.filter(
-      (c) => !JSON.stringify(c).includes("ST_DWithin"),
-    );
+    console.error("[applyFilters] Database query error:", dbErr);
+    // If PostGIS function is unavailable or another condition failed, re-run without distance condition
+    const safeConditions = distanceCondition
+      ? conditions.filter((c) => c !== distanceCondition)
+      : conditions;
     rows = await db
       .select({ listing: listingsTable, vendor: vendorsTable })
       .from(listingsTable)

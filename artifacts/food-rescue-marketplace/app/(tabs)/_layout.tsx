@@ -88,7 +88,7 @@ function ClassicTabLayout() {
             isIOS ? (
               <SymbolView name="house" tintColor={color} size={24} />
             ) : (
-              <Feather name="home" size={22} color={color} />
+              <Feather name="home" size={22} color={color as string} />
             ),
         }}
       />
@@ -96,7 +96,7 @@ function ClassicTabLayout() {
         name="map"
         options={{
           title: 'Map',
-          tabBarIcon: ({ color }) => <Feather name="map" size={21} color={color} />,
+          tabBarIcon: ({ color }) => <Feather name="map" size={21} color={color as string} />,
         }}
       />
       <Tabs.Screen
@@ -104,7 +104,7 @@ function ClassicTabLayout() {
         options={{
           title: 'Pickups',
           tabBarIcon: ({ color }) => (
-            <Feather name="package" size={21} color={color} />
+            <Feather name="package" size={21} color={color as string} />
           ),
         }}
       />
@@ -113,7 +113,7 @@ function ClassicTabLayout() {
         options={{
           title: 'My food',
           tabBarIcon: ({ color }) => (
-            <Feather name="shopping-bag" size={21} color={color} />
+            <Feather name="shopping-bag" size={21} color={color as string} />
           ),
         }}
       />

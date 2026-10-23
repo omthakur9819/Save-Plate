@@ -330,7 +330,7 @@ function generateLocalSaveBotReply(
 export function AIChatSheet({ visible, onClose, listings, userArea }: AIChatSheetProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);
 
   const [inputMessage, setInputMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
