@@ -34,9 +34,10 @@ interface AIChatSheetProps {
 }
 
 const SUGGESTION_CHIPS = [
-  '🥗 Veg food near me',
-  '🥐 Bakery under ₹100',
+  '🔥 Biggest discounts',
   '⚡ Ending soon',
+  '🥐 Bakery under ₹100',
+  '🥗 Veg & Jain options',
   '☕ Cafe snacks in Bandra',
 ];
 
@@ -70,22 +71,92 @@ function isListingNonVeg(l: FoodListing): boolean {
   return hasNonVegWord && (!hasVegTitle || !isPureVegTagged);
 }
 
+// Levenshtein distance for fuzzy typo tolerance
+function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const row = Array.from({ length: a.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= b.length; i++) {
+    let prev = i;
+    for (let j = 1; j <= a.length; j++) {
+      const val = b[i - 1] === a[j - 1] ? row[j - 1] : Math.min(row[j - 1], prev, row[j]) + 1;
+      row[j - 1] = prev;
+      prev = val;
+    }
+    row[a.length] = prev;
+  }
+  return row[a.length];
+}
+
+function hasFuzzyWord(text: string, targets: string[], maxDistance = 1): boolean {
+  const words = text.toLowerCase().split(/[^a-z0-9]+/);
+  for (const word of words) {
+    if (word.length < 3) continue;
+    for (const target of targets) {
+      if (word === target) return true;
+      if (Math.abs(word.length - target.length) <= maxDistance) {
+        if (levenshteinDistance(word, target) <= maxDistance) return true;
+      }
+    }
+  }
+  return false;
+}
+
+const BAKERY_KEYWORDS = [
+  'bakery', 'bread', 'croissant', 'pastry', 'cake', 'cruffin',
+  'sourdough', 'brioche', 'focaccia', 'babka', 'tart', 'bun',
+  'muffin', 'donut', 'cookie', 'dessert', 'sweet', 'meetha', 'mithai'
+];
+
+const CAFE_KEYWORDS = [
+  'cafe', 'coffee', 'chai', 'tea', 'sandwich', 'snack', 'nashta',
+  'burger', 'wrap', 'roll', 'samosa', 'puff', 'salad', 'juice', 'shake'
+];
+
+const MEALS_KEYWORDS = [
+  'meal', 'lunch', 'dinner', 'thali', 'biryani', 'rice', 'roti',
+  'curry', 'paneer', 'dal', 'tiffin', 'platter', 'combo', 'pizza', 'pasta', 'noodles'
+];
+
+const MUMBAI_AREAS = [
+  'bandra', 'khar', 'colaba', 'lower parel', 'dadar', 'juhu',
+  'andheri', 'powai', 'santacruz', 'bkc', 'churchgate', 'marine drive',
+  'worli', 'kemps corner', 'fort', 'byculla', 'vile parle', 'matunga', 'sion', 'malad', 'borivali'
+];
+
 // Intelligent local fallback generator for offline resilience
 function generateLocalSaveBotReply(
   prompt: string,
   listings: FoodListing[],
   userArea?: string,
 ): { reply: string; listingIds: string[] } {
-  const query = prompt.toLowerCase();
+  const query = prompt.toLowerCase().trim();
 
-  // 1. Dietary filters (strictly distinguish non-veg from veg)
+  // 1. GREETING & INTRO DETECTION
+  const isGreeting = /^(hi|hello|hey|hola|namaste|yo|good (morning|afternoon|evening)|help|who are you|what can you do)[\s!.]*$/i.test(query);
+  if (isGreeting) {
+    const featured = listings.slice(0, 3);
+    const names = featured.map((l) => `${l.name} (${formatRupees(l.price)})`).join(', ');
+    return {
+      reply: `Hi there! 👋 I'm SaveBot, your Mumbai food rescue assistant. Ask me to find deals near you, bakery snacks under ₹100, meals ending soon, or pure veg specials. Current rescue finds: ${names}. What are you craving?`,
+      listingIds: featured.map((l) => l.id),
+    };
+  }
+
+  // 2. DIETARY FILTERS
   const isNonVeg =
     /\b(non[- ]?veg(?:etarian)?|no[- ]veg|not[- ]veg|mansahari|chicken|mutton|meat|fish|prawns?|kheema|keema|seafood|pork|bacon|lamb|gosht)\b/i.test(
       query,
-    );
+    ) || hasFuzzyWord(query, ['chicken', 'mutton', 'nonveg', 'seafood']);
+
+  const isJain = /\b(jain|no onion|no garlic|swaminarayan)\b/i.test(query);
   const isVeg =
     !isNonVeg &&
-    /(?<!no\s+|non[- ]?|not\s+)\b(veg|veggie|vegetarians?|shakahari|jain)\b/i.test(query);
+    (/(?<!no\s+|non[- ]?|not\s+)\b(veg|veggie|vegetarians?|shakahari)\b/i.test(query) ||
+      hasFuzzyWord(query, ['vegetarian', 'veggie']) ||
+      isJain);
   const isVegan = !isNonVeg && query.includes('vegan');
   const isEggless = query.includes('eggless') || query.includes('no egg') || query.includes('egg-free');
   const isNutFree =
@@ -94,34 +165,12 @@ function generateLocalSaveBotReply(
     query.includes('nut free') ||
     query.includes('without nuts');
 
-  // 2. Category filters
-  const isBakery =
-    query.includes('bakery') ||
-    query.includes('bread') ||
-    query.includes('croissant') ||
-    query.includes('cake') ||
-    query.includes('pastry') ||
-    query.includes('puff') ||
-    query.includes('meetha') ||
-    query.includes('dessert');
-  const isCafe =
-    query.includes('cafe') ||
-    query.includes('coffee') ||
-    query.includes('chai') ||
-    query.includes('tea') ||
-    query.includes('snack') ||
-    query.includes('nashta') ||
-    query.includes('sandwich');
-  const isMeals =
-    query.includes('meal') ||
-    query.includes('lunch') ||
-    query.includes('dinner') ||
-    query.includes('thali') ||
-    query.includes('biryani') ||
-    query.includes('rice') ||
-    query.includes('roti');
+  // 3. CATEGORY FILTERS WITH FUZZY SUPPORT
+  const isBakery = BAKERY_KEYWORDS.some((k) => query.includes(k)) || hasFuzzyWord(query, ['bakery', 'croissant', 'pastry', 'cake', 'bread', 'dessert']);
+  const isCafe = CAFE_KEYWORDS.some((k) => query.includes(k)) || hasFuzzyWord(query, ['coffee', 'sandwich', 'burger', 'snacks', 'cafe']);
+  const isMeals = MEALS_KEYWORDS.some((k) => query.includes(k)) || hasFuzzyWord(query, ['biryani', 'thali', 'dinner', 'lunch', 'meals', 'curry', 'pizza']);
 
-  // 3. Price filter
+  // 4. PRICE FILTER
   let maxPrice: number | null = null;
   const priceMatch =
     query.match(/(?:under|below|sub|less than|within|₹|rs\.?|inr)\s*(\d+)/i) ||
@@ -130,86 +179,101 @@ function generateLocalSaveBotReply(
     maxPrice = parseInt(priceMatch[1], 10);
   }
 
-  // 4. Mumbai areas
-  const mumbaiAreas = [
-    'bandra', 'khar', 'colaba', 'lower parel', 'dadar', 'juhu',
-    'andheri', 'powai', 'santacruz', 'bkc', 'churchgate', 'marine drive',
-    'worli', 'kemps corner', 'fort', 'byculla', 'vile parle',
-  ];
-  const matchedArea =
-    mumbaiAreas.find((area) => query.includes(area)) ||
-    (query.includes('near me') ? userArea?.toLowerCase() : undefined);
+  // 5. AREA FILTER WITH FUZZY MATCH
+  let matchedArea: string | undefined = undefined;
+  for (const area of MUMBAI_AREAS) {
+    if (query.includes(area) || hasFuzzyWord(query, [area])) {
+      matchedArea = area;
+      break;
+    }
+  }
+  if (!matchedArea && query.includes('near me') && userArea) {
+    matchedArea = userArea.toLowerCase();
+  }
 
-  // 1. Strict filtering
+  const isEndingSoon = /\b(ending soon|ends soon|closing soon|closes soon|urgent|last chance|expiring|hurry|pickup soon)\b/i.test(query);
+  const isBestDeals = /\b(best deals?|biggest discounts?|highest discounts?|huge discounts?|top savings?|cheapest|steal|super saver)\b/i.test(query);
+  const isExpensive = /\b(expensive|costly|costliest|priciest|pricy|premium|luxury|gourmet|highest price|most expensive)\b/i.test(query);
+
+  // VENDOR / RESTAURANT EXTRACTION (e.g. "bastian", "subko", "theobroma", "bombay canteen")
+  let matchedVendor: string | null = null;
+  for (const item of listings) {
+    const vWords = (item.vendor || '').toLowerCase().split(/[^a-z0-9]+/);
+    for (const vw of vWords) {
+      if (vw.length >= 4 && (query.includes(vw) || hasFuzzyWord(query, [vw]))) {
+        matchedVendor = item.vendor;
+        break;
+      }
+    }
+    if (matchedVendor) break;
+  }
+
+  // 6. STRICT FILTERING
   let candidates = [...listings];
 
-  // STRICT PRICE CEILING: Never return items exceeding maxPrice
+  // VENDOR FILTER
+  if (matchedVendor) {
+    const vPrefix = matchedVendor.toLowerCase().split(' ')[0];
+    const vendorMatches = candidates.filter((l) =>
+      (l.vendor || '').toLowerCase().includes(vPrefix) || query.includes((l.vendor || '').toLowerCase())
+    );
+    candidates = vendorMatches;
+  }
+
+  // STRICT PRICE CEILING
   if (maxPrice !== null) {
     candidates = candidates.filter((item) => item.price <= maxPrice);
   }
 
   // CATEGORY FILTER
+  // Rule: If an item has an explicit category (e.g. 'Meals'), keyword matches
+  // in its name (e.g. 'brioche') must NOT override the explicit category.
   if (isBakery) {
     candidates = candidates.filter((item) => {
       const cat = (item.category || '').toLowerCase();
+      if (cat && cat !== 'bakery') return false; // explicit non-bakery category — skip
       const name = item.name.toLowerCase();
+      const desc = (item.description || '').toLowerCase();
       return (
         cat === 'bakery' ||
-        name.includes('bread') ||
-        name.includes('croissant') ||
-        name.includes('cake') ||
-        name.includes('cruffin') ||
-        name.includes('pastry') ||
-        name.includes('sourdough') ||
-        name.includes('focaccia') ||
-        name.includes('babka') ||
-        name.includes('bun')
+        BAKERY_KEYWORDS.some((k) => name.includes(k) || desc.includes(k)) ||
+        hasFuzzyWord(`${name} ${desc}`, ['croissant', 'pastry', 'cake', 'bread'])
       );
     });
   } else if (isCafe) {
     candidates = candidates.filter((item) => {
       const cat = (item.category || '').toLowerCase();
+      if (cat && cat !== 'cafe') return false;
       const name = item.name.toLowerCase();
+      const desc = (item.description || '').toLowerCase();
       return (
         cat === 'cafe' ||
-        name.includes('coffee') ||
-        name.includes('sandwich') ||
-        name.includes('snack') ||
-        name.includes('chai') ||
-        name.includes('tea')
+        CAFE_KEYWORDS.some((k) => name.includes(k) || desc.includes(k)) ||
+        hasFuzzyWord(`${name} ${desc}`, ['coffee', 'sandwich', 'burger'])
       );
     });
   } else if (isMeals) {
     candidates = candidates.filter((item) => {
       const cat = (item.category || '').toLowerCase();
+      if (cat && cat !== 'meals') return false;
       const name = item.name.toLowerCase();
+      const desc = (item.description || '').toLowerCase();
       return (
         cat === 'meals' ||
-        name.includes('meal') ||
-        name.includes('thali') ||
-        name.includes('biryani') ||
-        name.includes('box')
+        MEALS_KEYWORDS.some((k) => name.includes(k) || desc.includes(k)) ||
+        hasFuzzyWord(`${name} ${desc}`, ['biryani', 'thali', 'curry', 'pizza'])
       );
     });
   }
 
-  // STRICT VEG VS NON-VEG FILTER
+  // STRICT VEG VS NON-VEG
   if (isNonVeg) {
     candidates = candidates.filter(isListingNonVeg);
-    const specificMeats = [
-      'chicken',
-      'mutton',
-      'kheema',
-      'keema',
-      'prawn',
-      'prawns',
-      'fish',
-      'egg',
-    ].filter((m) => query.includes(m));
+    const specificMeats = NON_VEG_WORDS.filter((m) => query.includes(m) || hasFuzzyWord(query, [m]));
     if (specificMeats.length > 0) {
       const moreSpecific = candidates.filter((l) => {
         const text = `${l.name} ${l.description || ''}`.toLowerCase();
-        return specificMeats.some((m) => text.includes(m));
+        return specificMeats.some((m) => text.includes(m) || hasFuzzyWord(text, [m]));
       });
       if (moreSpecific.length > 0) candidates = moreSpecific;
     }
@@ -222,7 +286,15 @@ function generateLocalSaveBotReply(
     });
   }
 
-  // ADDITIONAL DIETARY FILTERS
+  if (isJain) {
+    candidates = candidates.filter((item) => {
+      if (isListingNonVeg(item)) return false;
+      const tags = (item.dietaryTags || item.dietTags || []).map((t) => t.toLowerCase());
+      const desc = (item.description || '').toLowerCase();
+      return tags.some((t) => t.includes('jain')) || desc.includes('jain') || desc.includes('no onion');
+    });
+  }
+
   if (isVegan) {
     candidates = candidates.filter((item) => {
       if (isListingNonVeg(item)) return false;
@@ -254,23 +326,76 @@ function generateLocalSaveBotReply(
 
   // AREA FILTER
   if (matchedArea) {
-    const inArea = candidates.filter((item) => item.area.toLowerCase().includes(matchedArea));
-    if (inArea.length > 0) candidates = inArea;
+    const inArea = candidates.filter((item) => item.area.toLowerCase().includes(matchedArea!) || hasFuzzyWord(item.area, [matchedArea!]));
+    candidates = inArea;
   }
 
-  // SORT
-  if (maxPrice !== null) {
+  // SPECIFIC FOOD KEYWORDS (e.g. "biryani", "prawns", "pasta", "sushi", "tacos", etc.)
+  const stopWords = new Set([
+    'give', 'me', 'expensive', 'costly', 'priciest', 'premium', 'food', 'at', 'in', 'from',
+    'restaurant', 'restaurent', 'hotel', 'cafe', 'bakery', 'meals', 'meal', 'dishes', 'dish',
+    'item', 'items', 'surplus', 'deal', 'deals', 'find', 'show', 'any', 'please', 'the', 'for',
+    'with', 'near', 'what', 'can', 'you', 'tell', 'display', 'options', 'today', 'now', 'there',
+    'arent', 'none', 'results', 'save', 'plate', 'best', 'good', 'cheap', 'cheapest', 'under',
+    'below', 'less', 'more', 'want', 'craving', 'like', 'some', 'sweet', 'sweets', 'dessert',
+    'veg', 'vegetarian', 'non', 'nonveg', 'non-veg', 'jain', 'vegan', 'eggless', 'halal',
+    'rs', 'inr', 'rupees'
+  ]);
+  const specificWords = query
+    .split(/[^a-z]+/)
+    .filter(
+      (w) =>
+        w.length > 2 &&
+        !stopWords.has(w) &&
+        !NON_VEG_WORDS.includes(w) &&
+        !(matchedVendor && matchedVendor.toLowerCase().includes(w)) &&
+        !(matchedArea && matchedArea.includes(w)),
+    );
+
+  if (specificWords.length > 0) {
+    const specificMatches = candidates.filter((item) => {
+      const text = `${item.name} ${item.description || ''}`.toLowerCase();
+      return specificWords.some((w) => text.includes(w) || hasFuzzyWord(text, [w]));
+    });
+    candidates = specificMatches;
+  }
+
+  // 7. SORTING STRATEGIES
+  if (isExpensive) {
+    candidates.sort((a, b) => b.price - a.price);
+  } else if (isEndingSoon) {
+    candidates.sort((a, b) => (a.quantity ?? 1) - (b.quantity ?? 1));
+  } else if (isBestDeals) {
+    candidates.sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
+  } else if (maxPrice !== null) {
     candidates.sort((a, b) => a.price - b.price);
   } else {
     candidates.sort((a, b) => 1 - b.price / b.originalPrice - (1 - a.price / a.originalPrice));
   }
 
-  // Case 1: Matching candidates found within constraints
+  // 8. RESPONSE GENERATION (WHEN MATCHES EXIST)
   if (candidates.length > 0) {
     const topListings = candidates.slice(0, 3);
-    const names = topListings.map((l) => `${l.name} (${formatRupees(l.price)})`).join(', ');
+    const names = topListings.map((l) => {
+      const discount = Math.round((1 - l.price / l.originalPrice) * 100);
+      return `${l.name} (${formatRupees(l.price)}, ${discount}% off)`;
+    }).join(', ');
+
     let reply = '';
-    if (isNonVeg) {
+    if (isExpensive && matchedVendor) {
+      reply = `✨ Here are the top premium surplus dishes from ${matchedVendor}: ${names}. Fine dining at rescue prices!`;
+    } else if (isExpensive) {
+      reply = `✨ Here are our top gourmet surplus picks: ${names}. Premium meals rescued at incredible discounts!`;
+    } else if (isEndingSoon) {
+      reply = `⚡ Urgent deals ending soon! Reserve before pickup windows close: ${names}. Save food and grab a deal!`;
+    } else if (isBestDeals) {
+      const maxDiscount = Math.max(...topListings.map((l) => Math.round((1 - l.price / l.originalPrice) * 100)));
+      reply = `🔥 Here are the biggest surplus discounts available right now (up to ${maxDiscount}% off): ${names}. Great food, huge savings!`;
+    } else if (matchedVendor) {
+      reply = `Found ${topListings.length} delicious surplus item${topListings.length > 1 ? 's' : ''} from ${matchedVendor}: ${names}!`;
+    } else if (isJain) {
+      reply = `Found ${topListings.length} delicious Jain-friendly deal${topListings.length > 1 ? 's' : ''}: ${names}!`;
+    } else if (isNonVeg) {
       reply = `Found ${topListings.length} delicious non-veg surplus deal${topListings.length > 1 ? 's' : ''}: ${names}! Grab them before pickup ends.`;
     } else if (maxPrice !== null && isBakery) {
       reply = `Found ${topListings.length} fresh bakery deal${topListings.length > 1 ? 's' : ''} under ₹${maxPrice}: ${names}!`;
@@ -284,46 +409,40 @@ function generateLocalSaveBotReply(
     return { reply, listingIds: topListings.map((l) => l.id) };
   }
 
-  // Case 2a: Non-veg requested but no exact sub-filter match
-  if (isNonVeg) {
-    const nonVegItems = listings.filter(isListingNonVeg);
-    nonVegItems.sort((a, b) => a.price - b.price);
-    const picked = nonVegItems.slice(0, 3);
-    const names = picked.map((p) => `${p.name} (${formatRupees(p.price)})`).join(', ');
-    const reply = picked.length > 0
-      ? `No non-veg items available matching your exact criteria right now. The available non-veg options are: ${names}.`
-      : `No non-veg surplus items are available right now. Please check back later today!`;
-    return { reply, listingIds: picked.map((p) => p.id) };
+  // 9. NO RESULTS FOUND - DISPLAY NONE RESULTS
+  let noResultMsg = 'No matching surplus items found right now.';
+  if (matchedVendor && (isBakery || isCafe || isMeals)) {
+    const catLabel = isBakery ? 'sweets / bakery' : isCafe ? 'cafe snacks' : 'meals';
+    noResultMsg = `No ${catLabel} surplus items found from ${matchedVendor} right now. Please check back later today!`;
+  } else if (matchedVendor && specificWords.length > 0) {
+    noResultMsg = `No surplus items found matching "${specificWords.join(' ')}" from ${matchedVendor} right now. Please check back later today!`;
+  } else if (matchedVendor) {
+    noResultMsg = `No surplus listings currently available from ${matchedVendor}. Please check back later today!`;
+  } else if (maxPrice !== null && (isBakery || isCafe || isMeals)) {
+    noResultMsg = `No ${isBakery ? 'bakery' : isCafe ? 'cafe' : 'meal'} items found under ₹${maxPrice} right now. Check back later as new surplus bags are posted!`;
+  } else if (maxPrice !== null) {
+    noResultMsg = `No surplus items found under ₹${maxPrice} right now. Check back later today as more surplus bags are added!`;
+  } else if (isNonVeg) {
+    noResultMsg = `No non-veg surplus items found matching your criteria right now. Please check back later today!`;
+  } else if (isJain) {
+    noResultMsg = `No Jain-friendly surplus items found matching your search right now. Please check back later today!`;
+  } else if (isVegan) {
+    noResultMsg = `No vegan surplus items found matching your search right now. Please check back later today!`;
+  } else if (isVeg) {
+    noResultMsg = `No vegetarian surplus items found matching your criteria right now. Please check back later today!`;
+  } else if (matchedArea && specificWords.length > 0) {
+    noResultMsg = `No surplus items found matching "${specificWords.join(' ')}" in ${matchedArea} right now. Please check back later!`;
+  } else if (matchedArea) {
+    noResultMsg = `No surplus items found in ${matchedArea} right now. Try checking nearby areas or check back later!`;
+  } else if (specificWords.length > 0) {
+    noResultMsg = `No surplus listings found matching "${specificWords.join(' ')}". Please check back later today as restaurants add new surplus bags!`;
+  } else {
+    noResultMsg = `No surplus listings found matching your request right now. Please check back later today as restaurants add new surplus bags!`;
   }
 
-  // Case 2b: Budget limit was set but nothing matched under maxPrice
-  if (maxPrice !== null) {
-    let alternatives = [...listings];
-    if (isBakery) {
-      const catAlts = alternatives.filter((l) => (l.category || '').toLowerCase() === 'bakery');
-      if (catAlts.length > 0) alternatives = catAlts;
-    }
-    alternatives.sort((a, b) => a.price - b.price);
-    const lowest = alternatives[0];
-    const picked = alternatives.slice(0, 3);
-    const reply = lowest
-      ? `No ${isBakery ? 'bakery' : 'surplus'} items available under ₹${maxPrice} right now. The lowest priced option is ${lowest.name} (${formatRupees(lowest.price)}). Here are the closest budget options:`
-      : `No items found under ₹${maxPrice} right now. Check back later today as more surplus bags are added!`;
-    return { reply, listingIds: picked.map((p) => p.id) };
-  }
-
-  // Case 3: Keyword search fallback
-  const keywordMatches = listings.filter((item) => {
-    const text = `${item.name} ${item.vendor} ${item.area} ${item.category}`.toLowerCase();
-    const words = query.split(/\s+/).filter((w) => w.length > 2);
-    return words.some((w) => text.includes(w));
-  });
-
-  const topListings = keywordMatches.length > 0 ? keywordMatches.slice(0, 3) : listings.slice(0, 2);
-  const names = topListings.map((l) => `${l.name} (${formatRupees(l.price)})`).join(', ');
   return {
-    reply: `Here are top food rescue options available today: ${names}.`,
-    listingIds: topListings.map((l) => l.id),
+    reply: noResultMsg,
+    listingIds: [],
   };
 }
 
@@ -575,6 +694,26 @@ export function AIChatSheet({ visible, onClose, listings, userArea }: AIChatShee
                           {m.content}
                         </Text>
                       </View>
+
+                      {/* Zero Results Indicator */}
+                      {!isUser && Array.isArray(m.listingIds) && m.listingIds.length === 0 && (
+                        <View
+                          style={[
+                            styles.noResultsNotice,
+                            { backgroundColor: colors.secondary, borderColor: colors.border },
+                          ]}
+                        >
+                          <Feather name="search" size={12} color={colors.mutedForeground} />
+                          <Text
+                            style={[
+                              styles.noResultsNoticeText,
+                              { color: colors.mutedForeground },
+                            ]}
+                          >
+                            0 surplus listings found
+                          </Text>
+                        </View>
+                      )}
 
                       {/* Matched Listing Cards */}
                       {!isUser && m.listingIds && m.listingIds.length > 0 && (
@@ -940,6 +1079,21 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 11,
     fontWeight: '700',
+  },
+  noResultsNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  noResultsNoticeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   errorBanner: {
     flexDirection: 'row',

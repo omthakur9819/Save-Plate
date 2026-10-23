@@ -16,7 +16,7 @@ $env:CLERK_SECRET_KEY = "sk_test_mocksecretmocksecretmocksecretmocksecret"
 $env:EXPO_PUBLIC_SUPABASE_URL = "http://localhost:54321"
 $env:EXPO_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.anon-key"
 
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd 'artifacts/api-server'; node --enable-source-maps ./dist/index.mjs"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd 'artifacts/api-server'; node --env-file=.env --enable-source-maps ./dist/index.mjs"
 
 # 3. Start Frontend App (Expo Web & Metro)
 cd 'artifacts/food-rescue-marketplace'

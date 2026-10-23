@@ -183,18 +183,23 @@ export default function ListingDetailScreen() {
                 {(listing.dietaryTags || listing.dietTags || []).length > 0 && (
                   <View style={styles.dietTagsRow}>
                     {(listing.dietaryTags || listing.dietTags || []).map((t) => {
+                      const lower = t.toLowerCase();
                       const label =
-                        t === 'veg' || t === 'vegetarian'
+                        lower === 'veg' || lower === 'vegetarian'
                           ? '🌱 Vegetarian'
-                          : t === 'vegan'
+                          : lower === 'vegan'
                             ? '🌿 Vegan'
-                            : t === 'egg_free' || t === 'eggless'
+                            : lower === 'egg_free' || lower === 'eggless'
                               ? '🥚 Egg-Free'
-                              : t === 'jain'
+                              : lower === 'jain'
                                 ? '✨ Jain'
-                                : t === 'halal'
+                                : lower === 'halal'
                                   ? '☪️ Halal'
-                                  : t;
+                                  : lower === 'dairy-free' || lower === 'dairy_free'
+                                    ? '🥛 Dairy-Free'
+                                    : lower === 'gluten-free' || lower === 'gluten_free'
+                                      ? '🌾 Gluten-Free'
+                                      : t;
                       return (
                         <View key={`detail-diet-${t}`} style={styles.dietTagBadge}>
                           <Text style={styles.dietTagBadgeText}>{label}</Text>
@@ -211,7 +216,23 @@ export default function ListingDetailScreen() {
                       Contains:
                     </Text>
                     <Text style={[styles.allergenNoticeValue, { color: colors.foreground }]}>
-                      {listing.allergens.join(', ')}
+                      {listing.allergens
+                        .map((a) => {
+                          const map: Record<string, string> = {
+                            milk: 'Milk / Dairy',
+                            egg: 'Egg',
+                            peanuts: 'Peanuts',
+                            tree_nuts: 'Tree Nuts',
+                            gluten: 'Gluten',
+                            soy: 'Soy',
+                            fish: 'Fish',
+                            shellfish: 'Shellfish',
+                            sesame: 'Sesame',
+                            mustard: 'Mustard',
+                          };
+                          return map[a.toLowerCase()] || a.replace(/_/g, ' ');
+                        })
+                        .join(', ')}
                     </Text>
                   </View>
                 ) : (
@@ -232,7 +253,23 @@ export default function ListingDetailScreen() {
                       May contain traces of:
                     </Text>
                     <Text style={[styles.allergenNoticeValue, { color: colors.foreground }]}>
-                      {listing.mayContain.join(', ')}
+                      {listing.mayContain
+                        .map((a) => {
+                          const map: Record<string, string> = {
+                            milk: 'Milk / Dairy',
+                            egg: 'Egg',
+                            peanuts: 'Peanuts',
+                            tree_nuts: 'Tree Nuts',
+                            gluten: 'Gluten',
+                            soy: 'Soy',
+                            fish: 'Fish',
+                            shellfish: 'Shellfish',
+                            sesame: 'Sesame',
+                            mustard: 'Mustard',
+                          };
+                          return map[a.toLowerCase()] || a.replace(/_/g, ' ');
+                        })
+                        .join(', ')}
                     </Text>
                   </View>
                 )}

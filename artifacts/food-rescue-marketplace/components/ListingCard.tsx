@@ -113,18 +113,23 @@ export function ListingCard({
           {listing.allergenInfoConfirmed ? (
             <>
               {(listing.dietaryTags || listing.dietTags || []).map((t) => {
+                const lower = t.toLowerCase();
                 const label =
-                  t === 'veg' || t === 'vegetarian'
+                  lower === 'veg' || lower === 'vegetarian'
                     ? '🌱 Veg'
-                    : t === 'vegan'
+                    : lower === 'vegan'
                       ? '🌿 Vegan'
-                      : t === 'egg_free' || t === 'eggless'
+                      : lower === 'egg_free' || lower === 'eggless'
                         ? '🥚 Egg-Free'
-                        : t === 'jain'
+                        : lower === 'jain'
                           ? '✨ Jain'
-                          : t === 'halal'
+                          : lower === 'halal'
                             ? '☪️ Halal'
-                            : t;
+                            : lower === 'dairy-free' || lower === 'dairy_free'
+                              ? '🥛 Dairy-Free'
+                              : lower === 'gluten-free' || lower === 'gluten_free'
+                                ? '🌾 Gluten-Free'
+                                : t;
                 return (
                   <View key={`card-diet-${t}`} style={styles.dietBadge}>
                     <Text style={styles.dietBadgeText}>{label}</Text>
@@ -134,17 +139,55 @@ export function ListingCard({
               {listing.allergens && listing.allergens.length > 0 && (
                 <View style={styles.allergenAlertBadge}>
                   <Text style={styles.allergenAlertText} numberOfLines={1}>
-                    Contains: {listing.allergens.join(', ')}
+                    Contains: {listing.allergens
+                      .map((a) => {
+                        const map: Record<string, string> = {
+                          milk: 'Milk',
+                          egg: 'Egg',
+                          peanuts: 'Peanuts',
+                          tree_nuts: 'Tree Nuts',
+                          gluten: 'Gluten',
+                          soy: 'Soy',
+                          fish: 'Fish',
+                          shellfish: 'Shellfish',
+                          sesame: 'Sesame',
+                          mustard: 'Mustard',
+                        };
+                        return map[a.toLowerCase()] || a.replace(/_/g, ' ');
+                      })
+                      .join(', ')}
                   </Text>
                 </View>
               )}
-              {warningNotice && (
+              {warningNotice ? (
                 <View style={styles.mayContainAlertBadge}>
                   <Text style={styles.mayContainAlertText} numberOfLines={1}>
                     ⚠️ {warningNotice}
                   </Text>
                 </View>
-              )}
+              ) : listing.mayContain && listing.mayContain.length > 0 ? (
+                <View style={styles.mayContainAlertBadge}>
+                  <Text style={styles.mayContainAlertText} numberOfLines={1}>
+                    Traces: {listing.mayContain
+                      .map((a) => {
+                        const map: Record<string, string> = {
+                          milk: 'Milk',
+                          egg: 'Egg',
+                          peanuts: 'Peanuts',
+                          tree_nuts: 'Tree Nuts',
+                          gluten: 'Gluten',
+                          soy: 'Soy',
+                          fish: 'Fish',
+                          shellfish: 'Shellfish',
+                          sesame: 'Sesame',
+                          mustard: 'Mustard',
+                        };
+                        return map[a.toLowerCase()] || a.replace(/_/g, ' ');
+                      })
+                      .join(', ')}
+                  </Text>
+                </View>
+              ) : null}
             </>
           ) : (
             <View style={styles.unconfirmedBadge}>
