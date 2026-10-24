@@ -358,7 +358,10 @@ router.get("/orders", requireUser, async (_req, res) => {
 
 router.post("/orders", requireUser, async (req, res) => {
   const input = CreateOrderBody.parse(req.body);
-  const consumerUserId = userId(res);
+  let consumerUserId = userId(res) || "demo-consumer-1";
+  if (consumerUserId.includes("vendor")) {
+    consumerUserId = "demo-consumer-1";
+  }
   const order = await db.transaction(async (tx) => {
     const [listing] = await tx
       .select()
@@ -521,7 +524,42 @@ router.post("/orders/verify-pickup", requireUser, async (req, res) => {
   res.json(mapOrder(updated));
 });
 
+async function findVendorByIdOrName(vendorParam: string) {
+  const param = (vendorParam || "").trim();
+  if (UUID_REGEX.test(param)) {
+    const [found] = await db
+      .select()
+      .from(vendorsTable)
+      .where(eq(vendorsTable.id, param))
+      .limit(1);
+    if (found) return found;
+  }
+  // Try exact name match
+  const [byName] = await db
+    .select()
+    .from(vendorsTable)
+    .where(eq(vendorsTable.name, param))
+    .limit(1);
+  if (byName) return byName;
+
+  // Try normalized slug or lowercase match
+  const allVendors = await db.select().from(vendorsTable);
+  const cleanParam = param.replace(/^rest-/, "").toLowerCase().replace(/[^\w]/g, "");
+  return (
+    allVendors.find(
+      (v) =>
+        v.id === param ||
+        v.name.toLowerCase() === param.toLowerCase() ||
+        v.name.toLowerCase().replace(/[^\w]/g, "") === cleanParam,
+    ) || null
+  );
+}
+
 router.get("/vendors/following", requireUser, async (_req, res) => {
+  let currentUserId = userId(res) || "demo-consumer-1";
+  if (currentUserId.includes("vendor")) {
+    currentUserId = "demo-consumer-1";
+  }
   const followed = await db
     .select({
       vendorId: vendorsTable.id,
@@ -532,26 +570,24 @@ router.get("/vendors/following", requireUser, async (_req, res) => {
     })
     .from(vendorFollowsTable)
     .innerJoin(vendorsTable, eq(vendorsTable.id, vendorFollowsTable.vendorId))
-    .where(eq(vendorFollowsTable.consumerUserId, userId(res)))
+    .where(eq(vendorFollowsTable.consumerUserId, currentUserId))
     .orderBy(desc(vendorFollowsTable.createdAt));
   res.json(followed);
 });
 
 router.put("/vendors/:vendorId/follow", requireUser, async (req, res) => {
-  const vendorId = String(req.params.vendorId);
-  const [vendor] = await db
-    .select()
-    .from(vendorsTable)
-    .where(eq(vendorsTable.id, vendorId))
-    .limit(1);
+  const vendor = await findVendorByIdOrName(String(req.params.vendorId));
   if (!vendor) throw new HttpError(404, "Shop not found.");
-  const currentUserId = userId(res);
+  let currentUserId = userId(res) || "demo-consumer-1";
+  if (currentUserId.includes("vendor")) {
+    currentUserId = "demo-consumer-1";
+  }
   if (vendor.ownerUserId === currentUserId) {
     throw new HttpError(400, "You cannot follow your own shop.");
   }
   const [follow] = await db
     .insert(vendorFollowsTable)
-    .values({ consumerUserId: currentUserId, vendorId })
+    .values({ consumerUserId: currentUserId, vendorId: vendor.id })
     .onConflictDoNothing()
     .returning();
   if (follow) {
@@ -570,7 +606,7 @@ router.put("/vendors/:vendorId/follow", requireUser, async (req, res) => {
     .where(
       and(
         eq(vendorFollowsTable.consumerUserId, currentUserId),
-        eq(vendorFollowsTable.vendorId, vendorId),
+        eq(vendorFollowsTable.vendorId, vendor.id),
       ),
     )
     .limit(1);
@@ -584,12 +620,21 @@ router.put("/vendors/:vendorId/follow", requireUser, async (req, res) => {
 });
 
 router.delete("/vendors/:vendorId/follow", requireUser, async (req, res) => {
+  const vendor = await findVendorByIdOrName(String(req.params.vendorId));
+  if (!vendor) {
+    res.status(204).end();
+    return;
+  }
+  let currentUserId = userId(res) || "demo-consumer-1";
+  if (currentUserId.includes("vendor")) {
+    currentUserId = "demo-consumer-1";
+  }
   await db
     .delete(vendorFollowsTable)
     .where(
       and(
-        eq(vendorFollowsTable.consumerUserId, userId(res)),
-        eq(vendorFollowsTable.vendorId, String(req.params.vendorId)),
+        eq(vendorFollowsTable.consumerUserId, currentUserId),
+        eq(vendorFollowsTable.vendorId, vendor.id),
       ),
     );
   res.status(204).end();
@@ -727,6 +772,406 @@ router.delete("/push-devices", requireUser, async (req, res) => {
       ),
     );
   res.status(204).end();
+});
+
+// ==========================================
+// DIRECT CLIENT SYNC ENDPOINTS (For Mobile App -> Drizzle PostgreSQL)
+// ==========================================
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+router.post("/sync/order", requireUser, async (req, res) => {
+  try {
+    let consumerUserId = userId(res) || "demo-consumer-1";
+    if (consumerUserId.includes("vendor")) {
+      consumerUserId = "demo-consumer-1";
+    }
+    const {
+      listingId,
+      listingName,
+      vendor: vendorNameInput,
+      quantity = 1,
+      unitPrice,
+      originalUnitPrice,
+      totalPrice,
+      pickupWindow,
+      pickupArea,
+      status = "RESERVED",
+    } = req.body;
+
+    // 1. Find or create vendor
+    const vName = (vendorNameInput || "Local Kitchen").trim();
+    let [vendor] = await db
+      .select()
+      .from(vendorsTable)
+      .where(eq(vendorsTable.name, vName))
+      .limit(1);
+
+    if (!vendor) {
+      const [newVendor] = await db
+        .insert(vendorsTable)
+        .values({
+          name: vName,
+          ownerUserId: `owner-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          city: "Mumbai",
+          area: pickupArea || "Bandra West",
+        })
+        .returning();
+      vendor = newVendor;
+    }
+
+    // 2. Find or create listing
+    let listing = null;
+    if (listingId && UUID_REGEX.test(listingId)) {
+      const [found] = await db
+        .select()
+        .from(listingsTable)
+        .where(eq(listingsTable.id, listingId))
+        .limit(1);
+      listing = found;
+    }
+
+    if (!listing) {
+      const [foundByName] = await db
+        .select()
+        .from(listingsTable)
+        .where(and(eq(listingsTable.name, listingName), eq(listingsTable.vendorId, vendor.id)))
+        .limit(1);
+      listing = foundByName;
+    }
+
+    if (!listing) {
+      const [createdListing] = await db
+        .insert(listingsTable)
+        .values({
+          vendorId: vendor.id,
+          name: listingName || "Surplus Rescue Item",
+          description: "Fresh surplus meal portion reserved via mobile app",
+          category: "Meals",
+          photo: "lunch",
+          price: Number(unitPrice) || 150,
+          originalPrice: Number(originalUnitPrice) || 350,
+          quantity: 10,
+          pickupWindow: pickupWindow || "Today, 6:00 PM – 8:00 PM",
+          area: pickupArea || vendor.area,
+          dietaryTags: ["vegetarian"],
+          expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+          active: true,
+        })
+        .returning();
+      listing = createdListing;
+    }
+
+    // 3. Create the order in marketplace_orders
+    const qty = Math.max(1, Number(quantity) || 1);
+    const uPrice = Number(unitPrice) || listing.price;
+    const oPrice = Number(originalUnitPrice) || listing.originalPrice;
+    const tPrice = Number(totalPrice) || (uPrice * qty);
+
+    const [createdOrder] = await db
+      .insert(marketplaceOrdersTable)
+      .values({
+        listingId: listing.id,
+        vendorId: vendor.id,
+        consumerUserId,
+        listingName: listing.name,
+        vendorName: vendor.name,
+        pickupArea: pickupArea || listing.area,
+        pickupWindow: pickupWindow || listing.pickupWindow,
+        quantity: qty,
+        unitPrice: uPrice,
+        originalUnitPrice: oPrice,
+        totalPrice: tPrice,
+        status: status,
+      })
+      .returning();
+
+    // 4. Decrement available quantity
+    await db
+      .update(listingsTable)
+      .set({ quantity: Math.max(0, listing.quantity - qty) })
+      .where(eq(listingsTable.id, listing.id));
+
+    res.status(201).json({ success: true, order: createdOrder });
+  } catch (error) {
+    console.error("[sync/order] Failed to sync order:", error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+router.post("/sync/order/status", requireUser, async (req, res) => {
+  try {
+    const { orderId, listingName, status = "PICKED_UP" } = req.body;
+    let consumerUserId = userId(res) || "demo-consumer-1";
+    if (consumerUserId.includes("vendor")) {
+      consumerUserId = "demo-consumer-1";
+    }
+    const isPickedUp = status === "PICKED_UP";
+
+    if (orderId && UUID_REGEX.test(orderId)) {
+      const [updated] = await db
+        .update(marketplaceOrdersTable)
+        .set({
+          status,
+          pickedUpAt: isPickedUp ? new Date() : undefined,
+        })
+        .where(eq(marketplaceOrdersTable.id, orderId))
+        .returning();
+      if (updated) {
+        res.json({ success: true, order: updated });
+        return;
+      }
+    }
+
+    // Fallback: update most recent active order matching listingName or for this user
+    const [latestOrder] = await db
+      .select()
+      .from(marketplaceOrdersTable)
+      .where(
+        listingName
+          ? and(
+              eq(marketplaceOrdersTable.listingName, listingName),
+              eq(marketplaceOrdersTable.status, "RESERVED"),
+            )
+          : and(
+              eq(marketplaceOrdersTable.consumerUserId, consumerUserId),
+              eq(marketplaceOrdersTable.status, "RESERVED"),
+            )
+      )
+      .orderBy(desc(marketplaceOrdersTable.createdAt))
+      .limit(1);
+
+    if (latestOrder) {
+      const [updated] = await db
+        .update(marketplaceOrdersTable)
+        .set({
+          status,
+          pickedUpAt: isPickedUp ? new Date() : undefined,
+        })
+        .where(eq(marketplaceOrdersTable.id, latestOrder.id))
+        .returning();
+      res.json({ success: true, order: updated });
+      return;
+    }
+
+    res.json({ success: false, message: "No matching pending order found to update" });
+  } catch (error) {
+    console.error("[sync/order/status] Failed to update order status:", error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+router.post("/sync/orders/batch", requireUser, async (req, res) => {
+  try {
+    let consumerUserId = userId(res) || "demo-consumer-1";
+    if (consumerUserId.includes("vendor")) {
+      consumerUserId = "demo-consumer-1";
+    }
+    const ordersList = Array.isArray(req.body.orders) ? req.body.orders : [];
+    const results = [];
+
+    for (const item of ordersList) {
+      const vName = (item.vendor || "Local Kitchen").trim();
+      let [vendor] = await db
+        .select()
+        .from(vendorsTable)
+        .where(eq(vendorsTable.name, vName))
+        .limit(1);
+
+      if (!vendor) {
+        const [newVendor] = await db
+          .insert(vendorsTable)
+          .values({
+            name: vName,
+            ownerUserId: `owner-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            city: "Mumbai",
+            area: item.pickupArea || item.area || "Bandra West",
+          })
+          .returning();
+        vendor = newVendor;
+      }
+
+      let listing = null;
+      if (item.listingId && UUID_REGEX.test(item.listingId)) {
+        const [found] = await db
+          .select()
+          .from(listingsTable)
+          .where(eq(listingsTable.id, item.listingId))
+          .limit(1);
+        listing = found;
+      }
+
+      if (!listing && item.listingName) {
+        const [foundByName] = await db
+          .select()
+          .from(listingsTable)
+          .where(and(eq(listingsTable.name, item.listingName), eq(listingsTable.vendorId, vendor.id)))
+          .limit(1);
+        listing = foundByName;
+      }
+
+      if (!listing) {
+        const [createdListing] = await db
+          .insert(listingsTable)
+          .values({
+            vendorId: vendor.id,
+            name: item.listingName || "Surplus Rescue Item",
+            description: "Fresh surplus meal portion reserved via mobile app",
+            category: "Meals",
+            photo: "lunch",
+            price: Number(item.unitPrice) || 150,
+            originalPrice: Number(item.originalUnitPrice) || 350,
+            quantity: 10,
+            pickupWindow: item.pickupWindow || "Today, 6:00 PM – 8:00 PM",
+            area: item.pickupArea || item.area || vendor.area,
+            dietaryTags: ["vegetarian"],
+            expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+            active: true,
+          })
+          .returning();
+        listing = createdListing;
+      }
+
+      const isCollected = Boolean(item.collected || item.status === "PICKED_UP");
+      const orderStatus = isCollected ? "PICKED_UP" : (item.status || "RESERVED");
+
+      const [existing] = await db
+        .select()
+        .from(marketplaceOrdersTable)
+        .where(
+          and(
+            eq(marketplaceOrdersTable.listingId, listing.id),
+            eq(marketplaceOrdersTable.consumerUserId, consumerUserId),
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        if (existing.status !== orderStatus) {
+          const [updated] = await db
+            .update(marketplaceOrdersTable)
+            .set({
+              status: orderStatus,
+              pickedUpAt: isCollected ? (existing.pickedUpAt || new Date()) : null,
+            })
+            .where(eq(marketplaceOrdersTable.id, existing.id))
+            .returning();
+          results.push(updated);
+        } else {
+          results.push(existing);
+        }
+      } else {
+        const qty = Math.max(1, Number(item.quantity) || 1);
+        const uPrice = Number(item.unitPrice) || listing.price;
+        const oPrice = Number(item.originalUnitPrice) || listing.originalPrice;
+        const tPrice = Number(item.totalPrice) || (uPrice * qty);
+
+        const [createdOrder] = await db
+          .insert(marketplaceOrdersTable)
+          .values({
+            listingId: listing.id,
+            vendorId: vendor.id,
+            consumerUserId,
+            listingName: listing.name,
+            vendorName: vendor.name,
+            pickupArea: item.pickupArea || item.area || listing.area,
+            pickupWindow: item.pickupWindow || listing.pickupWindow,
+            quantity: qty,
+            unitPrice: uPrice,
+            originalUnitPrice: oPrice,
+            totalPrice: tPrice,
+            status: orderStatus,
+            pickedUpAt: isCollected ? new Date() : null,
+          })
+          .returning();
+        results.push(createdOrder);
+      }
+    }
+
+    res.json({ success: true, count: results.length, orders: results });
+  } catch (error) {
+    console.error("[sync/orders/batch] Error:", error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+router.post("/sync/listing", requireUser, async (req, res) => {
+  try {
+    const ownerUserId = userId(res) || "demo-vendor-1";
+    const {
+      name,
+      description,
+      vendor: vendorName,
+      category = "Bakery",
+      price,
+      originalPrice,
+      quantity = 1,
+      pickupWindow = "Today, 6:00 PM – 8:00 PM",
+      area = "Bandra West",
+      latitude,
+      longitude,
+      dietaryTags = [],
+      dietTags = [],
+      allergens = [],
+      mayContain = [],
+      allergenInfoConfirmed = true,
+      photo = "lunch",
+    } = req.body;
+
+    const latE6 = typeof latitude === "number" ? Math.round(latitude * 1_000_000) : null;
+    const lngE6 = typeof longitude === "number" ? Math.round(longitude * 1_000_000) : null;
+
+    let [vendor] = await db
+      .select()
+      .from(vendorsTable)
+      .where(eq(vendorsTable.name, (vendorName || "Local Kitchen").trim()))
+      .limit(1);
+
+    if (!vendor) {
+      const [newVendor] = await db
+        .insert(vendorsTable)
+        .values({
+          name: (vendorName || "Local Kitchen").trim(),
+          ownerUserId,
+          city: "Mumbai",
+          area: area.trim(),
+          latitude: latE6,
+          longitude: lngE6,
+        })
+        .returning();
+      vendor = newVendor;
+    }
+
+    const [listing] = await db
+      .insert(listingsTable)
+      .values({
+        vendorId: vendor.id,
+        name: name.trim(),
+        description: (description || "").trim(),
+        category,
+        photo: photo === "bakery" ? "bakery" : "lunch",
+        price: Number(price),
+        originalPrice: Number(originalPrice),
+        quantity: Math.max(1, Number(quantity)),
+        pickupWindow: pickupWindow.trim(),
+        area: area.trim(),
+        latitude: latE6,
+        longitude: lngE6,
+        dietaryTags: Array.isArray(dietaryTags) ? dietaryTags : [],
+        dietTags: Array.isArray(dietTags) ? dietTags : [],
+        allergens: Array.isArray(allergens) ? allergens : [],
+        mayContain: Array.isArray(mayContain) ? mayContain : [],
+        allergenInfoConfirmed: Boolean(allergenInfoConfirmed),
+        expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+        active: true,
+      })
+      .returning();
+
+    res.status(201).json({ success: true, listing });
+  } catch (error) {
+    console.error("[sync/listing] Failed to create listing:", error);
+    res.status(500).json({ error: (error as Error).message });
+  }
 });
 
 export default router;

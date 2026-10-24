@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Alert,
   Platform,
@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatRupees, useMarketplace } from '@/context/MarketplaceContext';
 import { useColors } from '@/hooks/useColors';
+import { getApiUrl } from '@/lib/api-url';
 
 export default function PickupsScreen() {
   const colors = useColors();
@@ -20,6 +21,30 @@ export default function PickupsScreen() {
   const { orders, markCollected } = useMarketplace();
   const active = orders.filter((order) => !order.collected);
   const past = orders.filter((order) => order.collected);
+
+  useEffect(() => {
+    if (!orders.length) return;
+    const apiUrl = getApiUrl();
+    fetch(`${apiUrl}/api/sync/orders/batch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        orders: orders.map((o) => ({
+          listingId: o.listingId,
+          listingName: o.listingName,
+          vendor: o.vendor,
+          quantity: o.quantity || 1,
+          totalPrice: o.total,
+          pickupWindow: o.pickupWindow,
+          pickupArea: o.area,
+          status: o.collected ? 'PICKED_UP' : 'RESERVED',
+          collected: o.collected,
+        })),
+      }),
+    }).catch((err) => console.warn('[orders sync] skipped:', err));
+  }, [orders]);
 
   const confirmPickup = (id: string) => {
     Alert.alert('Pickup complete?', 'Mark this order as collected.', [

@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Image,
   Platform,
   Pressable,
@@ -10,6 +11,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ListingCard } from '@/components/ListingCard';
 import { formatRupees, useMarketplace } from '@/context/MarketplaceContext';
@@ -19,7 +21,8 @@ export default function RestaurantDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { restaurants, favorites, toggleFavorite } = useMarketplace();
+  const { restaurants, favorites, toggleFavorite, toggleFollowVendor, isVendorFollowed } = useMarketplace();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const restaurant = useMemo(() => {
     return (
@@ -28,6 +31,27 @@ export default function RestaurantDetailScreen() {
       restaurants[0]
     );
   }, [id, restaurants]);
+
+  const isFollowed = isVendorFollowed(restaurant?.name || '');
+
+  const handleToggleFollow = async () => {
+    if (!restaurant || isSubmitting) return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {}
+    setIsSubmitting(true);
+    try {
+      const nowFollowing = await toggleFollowVendor(restaurant.name);
+      Alert.alert(
+        nowFollowing ? 'Following!' : 'Unfollowed',
+        nowFollowing
+          ? `You are now following ${restaurant.name}. You'll receive instant alerts in Drizzle when surplus food drops are posted.`
+          : `You unfollowed ${restaurant.name}.`,
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const lowestPrice = useMemo(() => {
     if (!restaurant?.dishes.length) return 0;
@@ -74,7 +98,25 @@ export default function RestaurantDetailScreen() {
             {restaurant.dishes.length} dishes available today
           </Text>
         </View>
-        <View style={{ width: 40 }} />
+        <Pressable
+          onPress={handleToggleFollow}
+          disabled={isSubmitting}
+          style={[
+            styles.navFollowBtn,
+            {
+              backgroundColor: isFollowed ? '#15803D' : colors.card,
+              borderColor: isFollowed ? '#15803D' : colors.border,
+            },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={isFollowed ? 'Following restaurant' : 'Follow restaurant'}
+        >
+          <Feather
+            name={isFollowed ? 'bell-off' : 'bell'}
+            size={16}
+            color={isFollowed ? '#FFFFFF' : colors.primary}
+          />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -92,13 +134,42 @@ export default function RestaurantDetailScreen() {
 
           <View style={styles.heroBody}>
             <View style={styles.nameRow}>
-              <Text style={[styles.restaurantTitle, { color: colors.foreground }]}>
-                {restaurant.name}
-              </Text>
-              <View style={[styles.verifiedBadge, { backgroundColor: '#DCFCE7' }]}>
-                <Feather name="check" size={12} color="#166534" />
-                <Text style={styles.verifiedText}>Verified Rescue Partner</Text>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.restaurantTitle, { color: colors.foreground }]}>
+                  {restaurant.name}
+                </Text>
+                <View style={[styles.verifiedBadge, { backgroundColor: '#DCFCE7', alignSelf: 'flex-start', marginTop: 4 }]}>
+                  <Feather name="check" size={12} color="#166534" />
+                  <Text style={styles.verifiedText}>Verified Rescue Partner</Text>
+                </View>
               </View>
+
+              <Pressable
+                onPress={handleToggleFollow}
+                disabled={isSubmitting}
+                style={[
+                  styles.followHeroBtn,
+                  isFollowed
+                    ? { backgroundColor: '#15803D', borderColor: '#15803D' }
+                    : { backgroundColor: colors.card, borderColor: colors.primary, borderWidth: 1.5 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={isFollowed ? 'Following' : 'Follow'}
+              >
+                <Feather
+                  name={isFollowed ? 'check' : 'bell'}
+                  size={14}
+                  color={isFollowed ? '#FFFFFF' : colors.primary}
+                />
+                <Text
+                  style={[
+                    styles.followHeroBtnText,
+                    { color: isFollowed ? '#FFFFFF' : colors.primary },
+                  ]}
+                >
+                  {isFollowed ? 'Following' : 'Follow'}
+                </Text>
+              </Pressable>
             </View>
 
             <Text style={[styles.cuisineArea, { color: colors.mutedForeground }]}>
@@ -271,5 +342,26 @@ const styles = StyleSheet.create({
   menuSubtitle: {
     fontSize: 12,
     marginTop: 3,
+  },
+  navFollowBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  followHeroBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  followHeroBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

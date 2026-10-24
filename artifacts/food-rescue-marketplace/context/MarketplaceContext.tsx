@@ -11,6 +11,7 @@ import React, {
 } from 'react';
 
 import { supabase } from '../lib/supabase';
+import { getApiUrl } from '../lib/api-url';
 
 export type FoodCategory = 'Bakery' | 'Cafe' | 'Meals';
 export type ListingPhoto = 'bakery' | 'lunch';
@@ -175,11 +176,13 @@ interface PersistedState {
   listings: FoodListing[];
   orders: PickupOrder[];
   favorites: string[];
+  followedVendors?: string[];
   mode: AppMode;
   currentUser?: UserProfile | null;
 }
 
 interface MarketplaceValue extends PersistedState {
+  followedVendors: string[];
   isReady: boolean;
   storageError: boolean;
   currentUser: UserProfile | null;
@@ -189,6 +192,8 @@ interface MarketplaceValue extends PersistedState {
   register: (profile: Omit<UserProfile, 'id'>) => UserProfile;
   setMode: (mode: AppMode) => void;
   toggleFavorite: (id: string) => void;
+  toggleFollowVendor: (vendorNameOrId: string) => Promise<boolean>;
+  isVendorFollowed: (vendorNameOrId: string) => boolean;
   placeOrder: (
     listing: FoodListing,
     quantity?: number,
@@ -1120,6 +1125,50 @@ const DEFAULT_LISTINGS: FoodListing[] = [
     mayContain: ['mustard', 'tree_nuts'],
     allergenInfoConfirmed: true,
   },
+  {
+    id: 'mm-paneer-tikka-biryani',
+    name: 'Smoked Paneer Tikka Dum Biryani Box',
+    vendor: 'Mirchi & Mime',
+    category: 'Meals',
+    price: 165,
+    originalPrice: 450,
+    quantity: 4,
+    pickupWindow: 'Today, 7:00–8:30 PM',
+    area: 'Powai',
+    distance: '3.2 km',
+    photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.1185,
+    longitude: 72.909,
+    description: 'Slow-cooked fragrant basmati rice layered with clay-oven smoked malai paneer tikka, served with cucumber mint raita.',
+    dietaryTags: ['vegetarian', 'gluten-free'],
+    dietTags: ['vegetarian', 'gluten-free'],
+    allergens: ['milk'],
+    mayContain: ['tree_nuts', 'mustard'],
+    allergenInfoConfirmed: true,
+  },
+  {
+    id: 'mm-gulab-jamun-rabdi',
+    name: 'Warm Gulab Jamun & Kesari Rabdi Duo',
+    vendor: 'Mirchi & Mime',
+    category: 'Meals',
+    price: 110,
+    originalPrice: 280,
+    quantity: 5,
+    pickupWindow: 'Today, 7:00–8:30 PM',
+    area: 'Powai',
+    distance: '3.2 km',
+    photo: 'lunch',
+    imageUri: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&w=600&q=80',
+    latitude: 19.1185,
+    longitude: 72.909,
+    description: 'Melt-in-mouth milk mawa jamuns steeped in green cardamom sugar syrup, topped with thick saffron almond rabdi.',
+    dietaryTags: ['vegetarian', 'eggless'],
+    dietTags: ['vegetarian', 'eggless'],
+    allergens: ['milk', 'gluten', 'tree_nuts'],
+    mayContain: ['peanuts'],
+    allergenInfoConfirmed: true,
+  },
 ];
 
 export const VENDOR_METADATA: Record<string, { coverImage: string; rating: number; ratingCount: number }> = {
@@ -1186,6 +1235,7 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
   const [listings, setListings] = useState<FoodListing[]>(DEFAULT_LISTINGS);
   const [orders, setOrders] = useState<PickupOrder[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [followedVendors, setFollowedVendors] = useState<string[]>([]);
   const [mode, setMode] = useState<AppMode>('shopper');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(DEMO_SHOPPER);
   const [isReady, setIsReady] = useState(false);
@@ -1194,12 +1244,14 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
   const listingsRef = useRef<FoodListing[]>(DEFAULT_LISTINGS);
   const ordersRef = useRef<PickupOrder[]>([]);
   const favoritesRef = useRef<string[]>([]);
+  const followedVendorsRef = useRef<string[]>([]);
   const modeRef = useRef<AppMode>('shopper');
   const userRef = useRef<UserProfile | null>(DEMO_SHOPPER);
 
   listingsRef.current = listings;
   ordersRef.current = orders;
   favoritesRef.current = favorites;
+  followedVendorsRef.current = followedVendors;
   modeRef.current = mode;
   userRef.current = currentUser;
 
@@ -1244,17 +1296,39 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
             };
           });
 
+          const savedFollows = saved.followedVendors ?? [];
+
           listingsRef.current = localizedListings;
           ordersRef.current = localizedOrders;
           favoritesRef.current = saved.favorites ?? [];
+          followedVendorsRef.current = savedFollows;
           modeRef.current = saved.mode ?? 'shopper';
           userRef.current = saved.currentUser !== undefined ? saved.currentUser : DEMO_SHOPPER;
 
           setListings(localizedListings);
           setOrders(localizedOrders);
           setFavorites(saved.favorites ?? []);
+          setFollowedVendors(savedFollows);
           setMode(saved.mode ?? 'shopper');
           setCurrentUser(userRef.current);
+
+          // Background sync followed vendors from Drizzle backend
+          try {
+            const apiUrl = getApiUrl();
+            fetch(`${apiUrl}/api/vendors/following`, {
+              headers: { 'x-marketplace-user-id': 'demo-consumer-1' },
+            })
+              .then((res) => (res.ok ? res.json() : null))
+              .then((backendFollows: Array<{ name: string; vendorId: string }> | null) => {
+                if (alive && Array.isArray(backendFollows) && backendFollows.length > 0) {
+                  const names = backendFollows.map((b) => b.name);
+                  const merged = Array.from(new Set([...savedFollows, ...names]));
+                  followedVendorsRef.current = merged;
+                  setFollowedVendors(merged);
+                }
+              })
+              .catch(() => {});
+          } catch {}
         }
       })
       .catch((err) => {
@@ -1273,18 +1347,21 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
     const nextListings = next.listings ?? listingsRef.current;
     const nextOrders = next.orders ?? ordersRef.current;
     const nextFavorites = next.favorites ?? favoritesRef.current;
+    const nextFollowed = next.followedVendors ?? followedVendorsRef.current;
     const nextMode = next.mode ?? modeRef.current;
     const nextUser = next.currentUser !== undefined ? next.currentUser : userRef.current;
 
     listingsRef.current = nextListings;
     ordersRef.current = nextOrders;
     favoritesRef.current = nextFavorites;
+    followedVendorsRef.current = nextFollowed;
     modeRef.current = nextMode;
     userRef.current = nextUser;
 
     setListings(nextListings);
     setOrders(nextOrders);
     setFavorites(nextFavorites);
+    setFollowedVendors(nextFollowed);
     setMode(nextMode);
     setCurrentUser(nextUser);
 
@@ -1292,6 +1369,7 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
       listings: nextListings,
       orders: nextOrders,
       favorites: nextFavorites,
+      followedVendors: nextFollowed,
       mode: nextMode,
       currentUser: nextUser,
     };
@@ -1336,6 +1414,7 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
       listings,
       orders,
       favorites,
+      followedVendors,
       mode,
       currentUser,
       restaurants,
@@ -1374,6 +1453,37 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
           : [...cur, id];
         save({ favorites: nextFavorites });
       },
+      toggleFollowVendor: async (vendorNameOrId: string) => {
+        const norm = vendorNameOrId.trim();
+        const cur = followedVendorsRef.current;
+        const isFollowing = cur.some((v) => v.toLowerCase() === norm.toLowerCase());
+        const nextFollowed = isFollowing
+          ? cur.filter((v) => v.toLowerCase() !== norm.toLowerCase())
+          : [...cur, norm];
+        save({ followedVendors: nextFollowed });
+
+        try {
+          const apiUrl = getApiUrl();
+          const effectiveUserId = (!currentUser || currentUser.role === 'vendor' || currentUser.id?.includes('vendor'))
+            ? 'demo-consumer-1'
+            : currentUser.id;
+
+          await fetch(`${apiUrl}/api/vendors/${encodeURIComponent(norm)}/follow`, {
+            method: isFollowing ? 'DELETE' : 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-marketplace-user-id': effectiveUserId,
+            },
+          });
+        } catch (err) {
+          console.warn('[toggleFollowVendor] Sync skipped:', err);
+        }
+        return !isFollowing;
+      },
+      isVendorFollowed: (vendorNameOrId: string) => {
+        const norm = (vendorNameOrId || '').toLowerCase().trim();
+        return followedVendorsRef.current.some((v) => v.toLowerCase().trim() === norm);
+      },
       placeOrder: async (listing, quantity = 1, payment) => {
         const curListings = listingsRef.current;
         const current = curListings.find((item) => item.id === listing.id);
@@ -1403,6 +1513,38 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
         );
         save({ listings: nextListings, orders: [order, ...ordersRef.current] });
 
+        // Sync order to Drizzle PostgreSQL backend
+        try {
+          const apiUrl = getApiUrl();
+          const res = await fetch(`${apiUrl}/api/sync/order`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-marketplace-user-id': (!currentUser || currentUser.role === 'vendor' || currentUser.id?.includes('vendor'))
+                ? 'demo-consumer-1'
+                : currentUser.id,
+            },
+            body: JSON.stringify({
+              listingId: current.id,
+              listingName: current.name,
+              vendor: current.vendor,
+              quantity,
+              unitPrice: current.price,
+              originalUnitPrice: current.originalPrice,
+              totalPrice: current.price * quantity,
+              pickupWindow: current.pickupWindow,
+              pickupArea: current.area,
+              status: 'RESERVED',
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            console.log('[sync/order] Synced order to PostgreSQL:', data);
+          }
+        } catch (err) {
+          console.warn('[sync/order] skipped sync:', err);
+        }
+
         // Optional Supabase background sync
         supabase
           .from('orders')
@@ -1416,12 +1558,33 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
 
         return true;
       },
-      markCollected: (id) => {
+      markCollected: async (id) => {
+        const order = ordersRef.current.find((o) => o.id === id);
         save({
           orders: ordersRef.current.map((order) =>
             order.id === id ? { ...order, collected: true } : order,
           ),
         });
+
+        try {
+          const apiUrl = getApiUrl();
+          await fetch(`${apiUrl}/api/sync/order/status`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-marketplace-user-id': (!currentUser || currentUser.role === 'vendor' || currentUser.id?.includes('vendor'))
+                ? 'demo-consumer-1'
+                : currentUser.id,
+            },
+            body: JSON.stringify({
+              orderId: id,
+              listingName: order?.listingName,
+              status: 'PICKED_UP',
+            }),
+          });
+        } catch (err) {
+          console.warn('[sync/order/status] skipped sync:', err);
+        }
       },
       addListing: (listing) => {
         const hasManualCoords =
@@ -1451,6 +1614,39 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
           mode: 'vendor',
         });
 
+        // Sync new listing to Drizzle PostgreSQL backend
+        try {
+          const apiUrl = getApiUrl();
+          void fetch(`${apiUrl}/api/sync/listing`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-marketplace-user-id': currentUser?.id || 'demo-vendor-1',
+            },
+            body: JSON.stringify({
+              name: listing.name,
+              description: listing.description || '',
+              vendor: effectiveVendor,
+              category: listing.category,
+              price: Math.round(listing.price),
+              originalPrice: Math.round(listing.originalPrice),
+              quantity: Math.max(1, Math.round(listing.quantity)),
+              pickupWindow: listing.pickupWindow || 'Today, 6:00 PM – 8:00 PM',
+              area: listing.area || 'Bandra West',
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              dietaryTags: listing.dietaryTags || [],
+              dietTags: listing.dietTags || [],
+              allergens: listing.allergens || [],
+              mayContain: listing.mayContain || [],
+              allergenInfoConfirmed: Boolean(listing.allergenInfoConfirmed),
+              photo: listing.photo === 'bakery' ? 'bakery' : 'lunch',
+            }),
+          });
+        } catch (err) {
+          console.warn('[sync/listing] skipped sync:', err);
+        }
+
         // Optional Supabase background sync
         supabase
           .from('listings')
@@ -1466,7 +1662,7 @@ export function MarketplaceProvider({ children }: PropsWithChildren) {
         return nextListing.id;
       },
     }),
-    [currentUser, favorites, isReady, listings, mode, orders, restaurants, save, storageError],
+    [currentUser, favorites, followedVendors, isReady, listings, mode, orders, restaurants, save, storageError],
   );
 
   return (

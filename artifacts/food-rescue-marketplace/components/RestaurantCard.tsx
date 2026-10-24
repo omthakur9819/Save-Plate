@@ -2,17 +2,28 @@ import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { formatRupees, RestaurantGroup } from '@/context/MarketplaceContext';
+import * as Haptics from 'expo-haptics';
+import { formatRupees, RestaurantGroup, useMarketplace } from '@/context/MarketplaceContext';
 import { useColors } from '@/hooks/useColors';
 
 export function RestaurantCard({ restaurant }: { restaurant: RestaurantGroup }) {
   const colors = useColors();
+  const { toggleFollowVendor, isVendorFollowed } = useMarketplace();
+  const isFollowed = isVendorFollowed(restaurant.name);
 
   const handleOpenRestaurant = () => {
     router.push({
       pathname: '/restaurant/[id]',
       params: { id: restaurant.id },
     });
+  };
+
+  const handleToggleFollow = (e: any) => {
+    e.stopPropagation?.();
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+    void toggleFollowVendor(restaurant.name);
   };
 
   return (
@@ -37,9 +48,30 @@ export function RestaurantCard({ restaurant }: { restaurant: RestaurantGroup }) 
             <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
               {restaurant.name}
             </Text>
-            <View style={[styles.ratingPill, { backgroundColor: '#FEF3C7' }]}>
-              <Feather name="star" size={11} color="#D97706" />
-              <Text style={styles.ratingText}>{restaurant.rating.toFixed(1)}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Pressable
+                onPress={handleToggleFollow}
+                hitSlop={8}
+                style={[
+                  styles.followIconBtn,
+                  {
+                    backgroundColor: isFollowed ? '#DCFCE7' : colors.secondary,
+                    borderColor: isFollowed ? '#166534' : colors.border,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={isFollowed ? 'Following restaurant' : 'Follow restaurant'}
+              >
+                <Feather
+                  name={isFollowed ? 'check' : 'bell'}
+                  size={12}
+                  color={isFollowed ? '#166534' : colors.foreground}
+                />
+              </Pressable>
+              <View style={[styles.ratingPill, { backgroundColor: '#FEF3C7' }]}>
+                <Feather name="star" size={11} color="#D97706" />
+                <Text style={styles.ratingText}>{restaurant.rating.toFixed(1)}</Text>
+              </View>
             </View>
           </View>
 
@@ -144,6 +176,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     flex: 1,
+  },
+  followIconBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ratingPill: {
     flexDirection: 'row',
